@@ -112,7 +112,7 @@ const Cashier: React.FC = () => {
 
         {/* SCROLLABLE PRODUCT GRID */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 no-scrollbar bg-[#F4F7F9]">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5 pb-32 lg:pb-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5 pb-44 lg:pb-10">
             {filteredProducts.map((product) => {
               const inCart = cart.find(c => c.id === product.id);
               return (
@@ -185,26 +185,27 @@ const Cashier: React.FC = () => {
           )}
         </div>
 
-        <div className="p-8 bg-slate-50 border-t border-slate-200 shrink-0">
-          <div className="space-y-2 mb-6">
-            <div className="flex justify-between">
-              <span className="text-slate-400 font-bold uppercase text-xs tracking-widest">Total Bayar</span>
-              <span className="text-3xl font-black text-[#4089C9] tracking-tighter">{formatCurrency(total)}</span>
+        {/* REPOSITIONED: Floating Payment Card on Desktop */}
+        <div className="px-6 pb-10 shrink-0">
+          <div className="p-8 bg-slate-900 rounded-[40px] shadow-2xl shadow-slate-900/40 border border-white/10">
+            <div className="space-y-1 mb-6">
+              <p className="text-white/40 font-bold uppercase text-[10px] tracking-widest text-center">Total Pembayaran</p>
+              <h3 className="text-3xl font-black text-white text-center tracking-tighter">{formatCurrency(total)}</h3>
             </div>
+            <button
+              onClick={() => setShowCheckoutModal(true)}
+              disabled={cart.length === 0}
+              className="w-full py-5 bg-[#4089C9] hover:bg-[#3476ad] disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-[24px] font-black text-lg shadow-xl shadow-blue-500/20 active:scale-95 transition-all"
+            >
+              BAYAR SEKARANG
+            </button>
           </div>
-          <button
-            onClick={() => setShowCheckoutModal(true)}
-            disabled={cart.length === 0}
-            className="w-full py-5 bg-[#4089C9] disabled:bg-slate-200 text-white rounded-[24px] font-black text-xl shadow-2xl shadow-[#4089C9]/30 active:scale-95 transition-all"
-          >
-            BAYAR SEKARANG
-          </button>
         </div>
       </aside>
 
-      {/* Mobile Sticky Checkout Bar */}
+      {/* REPOSITIONED: Mobile Sticky Checkout Bar (Raised Higher) */}
       {cart.length > 0 && !showCheckoutModal && (
-        <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 animate-in slide-in-from-bottom duration-500">
+        <div className="lg:hidden fixed bottom-10 left-6 right-6 z-40 animate-in slide-in-from-bottom duration-500">
           <div className="bg-[#132B41] rounded-[32px] p-5 shadow-2xl flex items-center justify-between border border-white/10 ring-8 ring-white/10">
             <div className="flex items-center space-x-4 ml-2" onClick={() => setShowMobileCart(true)}>
               <div className="relative">
@@ -262,7 +263,7 @@ const Cashier: React.FC = () => {
                 </div>
               ))}
             </div>
-            <div className="p-8 bg-slate-50 border-t border-slate-100 shrink-0 pb-10">
+            <div className="p-8 bg-slate-50 border-t border-slate-100 shrink-0 pb-12">
               <div className="flex justify-between items-center mb-6">
                  <span className="text-slate-400 font-bold uppercase text-xs">Total Tagihan</span>
                  <span className="text-3xl font-black text-[#4089C9]">{formatCurrency(total)}</span>
