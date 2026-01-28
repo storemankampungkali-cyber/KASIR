@@ -6,11 +6,17 @@ import Cashier from './pages/Cashier';
 import History from './pages/History';
 import Reports from './pages/Reports';
 import MenuManagement from './pages/MenuManagement';
+import ToastContainer from './components/ToastContainer';
 import { useStore } from './store';
 
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
-  const { currentUser } = useStore();
+  const { currentUser, addToast } = useStore();
+
+  const handleLogin = () => {
+    useStore.getState().setCurrentUser({ id: 'u1', name: 'Alfian Dimas', role: 'ADMIN', outletId: 'o1' });
+    addToast('SUCCESS', 'Login Berhasil', 'Selamat datang kembali, Pak Boss!');
+  };
 
   if (!currentUser) {
     return (
@@ -32,7 +38,7 @@ const App: React.FC = () => {
               className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4.5 px-6 text-slate-900 focus:ring-2 focus:ring-[#4089C9] outline-none transition-all placeholder:text-slate-400"
             />
             <button 
-              onClick={() => useStore.getState().setCurrentUser({ id: 'u1', name: 'Alfian Dimas', role: 'ADMIN', outletId: 'o1' })}
+              onClick={handleLogin}
               className="w-full py-4.5 bg-[#4089C9] text-white font-black text-lg rounded-2xl shadow-xl shadow-blue-500/30 active:scale-95 transition-all mt-6"
             >
               Masuk Sekarang
@@ -40,6 +46,7 @@ const App: React.FC = () => {
           </div>
           <p className="text-slate-300 mt-12 text-[10px] font-bold tracking-[0.3em] uppercase">Enterprise Edition v2.1</p>
         </div>
+        <ToastContainer />
       </div>
     );
   }
@@ -81,6 +88,7 @@ const App: React.FC = () => {
   return (
     <Layout activePage={activePage} onPageChange={setActivePage}>
       {renderPage()}
+      <ToastContainer />
     </Layout>
   );
 };

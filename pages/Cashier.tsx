@@ -6,7 +6,7 @@ import { Category, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
 
 const Cashier: React.FC = () => {
-  const { products, cart, addToCart, updateQuantity, removeFromCart, clearCart, addTransaction, currentUser, qrisConfig } = useStore();
+  const { products, cart, addToCart, updateQuantity, removeFromCart, clearCart, addTransaction, currentUser, qrisConfig, addToast } = useStore();
   const [selectedCategory, setSelectedCategory] = useState<Category | 'Semua'>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
@@ -39,15 +39,15 @@ const Cashier: React.FC = () => {
   const handleCheckout = () => {
     if (cart.length === 0) return;
     if (paymentMethod === PaymentMethod.HUTANG && !customerName) {
-      alert('Masukkan nama pelanggan untuk transaksi hutang!');
+      addToast('ERROR', 'Input Pelanggan', 'Nama pelanggan wajib diisi untuk transaksi hutang.');
       return;
     }
     if (paymentMethod === PaymentMethod.TUNAI && cashReceived < total) {
-      alert('Uang tunai yang diterima kurang!');
+      addToast('ERROR', 'Uang Kurang', 'Nominal yang diterima harus lebih besar atau sama dengan total tagihan.');
       return;
     }
     if (paymentMethod === PaymentMethod.QRIS && !qrisConfig.isActive) {
-      alert('Pembayaran QRIS belum dikonfigurasi!');
+      addToast('INFO', 'Konfigurasi QRIS', 'Fitur QRIS belum diaktifkan di pengaturan.');
       return;
     }
 
@@ -71,6 +71,7 @@ const Cashier: React.FC = () => {
       setIsProcessing(false);
       setCustomerName('');
       setCashReceived(0);
+      addToast('SUCCESS', 'Pembayaran Berhasil', `Transaksi senilai ${formatCurrency(total)} telah tersimpan.`);
     }, 800);
   };
 
@@ -147,7 +148,10 @@ const Cashier: React.FC = () => {
             </div>
             <h2 className="text-2xl font-black text-slate-900">Pesanan</h2>
           </div>
-          <button onClick={clearCart} className="text-slate-300 hover:text-red-500 transition-all p-2">
+          <button onClick={() => {
+            clearCart();
+            addToast('INFO', 'Keranjang Kosong', 'Daftar pesanan telah dibersihkan.');
+          }} className="text-slate-300 hover:text-red-500 transition-all p-2">
             <Trash2 size={22} />
           </button>
         </div>
@@ -202,7 +206,7 @@ const Cashier: React.FC = () => {
         </div>
       </aside>
 
-      {/* Checkout Modal */}
+      {/* Checkout Modal (Unchanged checkout logic) */}
       {showCheckoutModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in" onClick={() => !isProcessing && setShowCheckoutModal(false)}></div>

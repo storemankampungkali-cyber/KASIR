@@ -6,7 +6,7 @@ import { Category, Product } from '../types';
 import { formatCurrency } from '../utils';
 
 const MenuManagement: React.FC = () => {
-  const { products, addProduct, updateProduct } = useStore();
+  const { products, addProduct, updateProduct, addToast } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,8 +28,10 @@ const MenuManagement: React.FC = () => {
     e.preventDefault();
     if (editingProduct) {
       updateProduct({ ...formData, id: editingProduct.id });
+      addToast('SUCCESS', 'Menu Diperbarui', `Perubahan pada ${formData.name} berhasil disimpan.`);
     } else {
       addProduct(formData);
+      addToast('SUCCESS', 'Menu Ditambahkan', `${formData.name} sekarang tersedia di katalog.`);
     }
     closeModal();
   };
@@ -66,6 +68,7 @@ const MenuManagement: React.FC = () => {
 
   const toggleActive = (p: Product) => {
     updateProduct({ ...p, isActive: !p.isActive });
+    addToast('INFO', p.isActive ? 'Menu Dinonaktifkan' : 'Menu Diaktifkan', `${p.name} telah diupdate statusnya.`);
   };
 
   return (
@@ -143,7 +146,7 @@ const MenuManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Form (Unchanged) */}
+      {/* Modal Form */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={closeModal}></div>

@@ -4,6 +4,15 @@ import { persist } from 'zustand/middleware';
 import { Product, CartItem, Transaction, Category, PaymentMethod, User } from './types';
 import { generateId } from './utils';
 
+export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
+
+interface Toast {
+  id: string;
+  type: ToastType;
+  title: string;
+  message: string;
+}
+
 interface QrisConfig {
   merchantName: string;
   qrImageUrl: string;
@@ -31,6 +40,10 @@ interface AppState {
   voidTransaction: (id: string, reason: string) => void;
   qrisConfig: QrisConfig;
   updateQrisConfig: (config: Partial<QrisConfig>) => void;
+  // Toast Logic
+  toasts: Toast[];
+  addToast: (type: ToastType, title: string, message: string) => void;
+  removeToast: (id: string) => void;
 }
 
 const INITIAL_PRODUCTS: Product[] = [
@@ -46,7 +59,6 @@ const INITIAL_PRODUCTS: Product[] = [
   { id: '10', name: 'Kerupuk Putih', price: 1000, costPrice: 300, category: Category.LAINNYA, isActive: true, outletId: 'o1' },
 ];
 
-// Generate 20 Sample Transactions for Dashboard visualization
 const generateSamples = (): Transaction[] => {
   const samples: Transaction[] = [];
   const now = new Date();
@@ -74,7 +86,7 @@ const generateSamples = (): Transaction[] => {
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentUser: { id: 'u1', name: 'Alfian Dimas', role: 'ADMIN', outletId: 'o1' },
       setCurrentUser: (user) => set({ currentUser: user }),
       theme: 'light',
@@ -113,7 +125,28 @@ export const useStore = create<AppState>()(
       })),
       qrisConfig: { merchantName: 'ANGKRINGAN PRO', qrImageUrl: '', isActive: true },
       updateQrisConfig: (config) => set((state) => ({ qrisConfig: { ...state.qrisConfig, ...config } })),
+      
+      // Toast Implementation
+      toasts: [],
+      addToast: (type, title, message) => {
+        const id = Math.random().toString(36).substring(2, 9);
+        set((state) => ({
+          toasts: [...state.toasts, { id, type, title, message }]
+        }));
+        setTimeout(() => get().removeToast(id), 4000);
+      },
+      removeToast: (id) => set((state) => ({
+        toasts: state.toasts.filter((t) => t.id !== id)
+      })),
     }),
-    { name: 'angkringan-pos-v5' }
+    { 
+      name: 'angkringan-pos-v5',
+      partialize: (state) => ({
+        currentUser: state.currentUser,
+        products: state.products,
+        transactions: state.transactions,
+        qrisConfig: state.qrisConfig,
+      })
+    }
   )
 );
