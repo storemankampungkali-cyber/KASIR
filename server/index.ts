@@ -6,6 +6,8 @@ import { pool, checkConnection, initDatabase } from './db';
 const app = express();
 const PORT = process.env.PORT || 3030;
 
+console.log('Starting Angkringan POS Server...');
+
 // Izinkan akses dari mana saja (Vercel, Localhost, dll)
 app.use(cors({
   origin: '*', 
@@ -127,7 +129,8 @@ app.put('/api/config/qris', async (req, res) => {
   }
 });
 
-app.listen(PORT, async () => {
+// Bind ke 0.0.0.0 untuk memastikan akses eksternal (terutama di container)
+app.listen(Number(PORT), '0.0.0.0', async () => {
   console.log(`🚀 Backend Angkringan running on port ${PORT}`);
   
   // Jalankan inisialisasi database otomatis
