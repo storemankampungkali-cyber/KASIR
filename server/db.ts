@@ -1,4 +1,3 @@
-
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -26,6 +25,7 @@ console.log(`🔌 Attempting DB Connection to: ${dbConfig.host} on port ${dbConf
 export const pool = mysql.createPool(dbConfig);
 
 // --- JURUS ANTI GAGAL: SQL DITANAM LANGSUNG DISINI ---
+// Server tidak perlu lagi mencari file schema.sql, jadi tidak mungkin error "File Not Found"
 const INITIAL_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS outlets (
       id VARCHAR(50) PRIMARY KEY,
@@ -99,7 +99,6 @@ export const initDatabase = async () => {
     connection = await pool.getConnection();
     
     // Langsung jalankan SQL Schema setiap kali server nyala
-    // Karena kita pakai 'IF NOT EXISTS' dan 'INSERT IGNORE', ini aman dijalankan berulang kali
     console.log('🔄 Memastikan struktur database tersedia...');
     await connection.query(INITIAL_SCHEMA_SQL);
     console.log('✅ Database siap! Tabel dan data awal sudah termuat.');

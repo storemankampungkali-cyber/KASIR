@@ -14,7 +14,10 @@ import {
   X,
   Database,
   CloudLightning,
-  RefreshCw
+  RefreshCw,
+  Activity,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { useStore } from '../store';
 
@@ -25,7 +28,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activePage, onPageChange }) => {
-  const { currentUser, connectionStatus, setConnectionStatus } = useStore();
+  const { currentUser, connectionStatus, setConnectionStatus, checkLatency, latency } = useStore();
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const menuItems = [
@@ -37,68 +40,96 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onPageChange }) =
     { id: 'settings', label: 'Pengaturan', icon: Settings },
   ];
 
-  // Monitor online/offline status
+  // Monitor online/offline status dan ping server
   useEffect(() => {
+    // Handler event browser
     const handleOnline = () => setConnectionStatus('CONNECTED');
     const handleOffline = () => setConnectionStatus('DISCONNECTED');
     
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
+    // Initial check
+    checkLatency();
+
+    // Interval ping setiap 10 detik
+    const pingInterval = setInterval(() => {
+      if (navigator.onLine) {
+        checkLatency();
+      }
+    }, 10000);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(pingInterval);
     };
-  }, [setConnectionStatus]);
+  }, [setConnectionStatus, checkLatency]);
 
   const ConnectionIndicator = () => {
-    const statusMap = {
-      CONNECTED: { 
-        color: 'bg-emerald-500', 
-        label: 'Database Online', 
-        icon: Database,
-        desc: 'Semua data tersinkronisasi sempurna ke cloud.'
-      },
-      SYNCING: { 
-        color: 'bg-amber-500', 
-        label: 'Syncing Data...', 
-        icon: RefreshCw,
-        desc: 'Sedang mengamankan transaksi terbaru Anda.'
-      },
-      DISCONNECTED: { 
-        color: 'bg-red-500', 
-        label: 'Database Offline', 
-        icon: CloudLightning,
-        desc: 'Koneksi terputus. Data disimpan di memori lokal.'
-      }
-    };
+    // Tentukan warna dan status berdasarkan latency atau connectionStatus
+    let statusColor = 'bg-red-500';
+    let textColor = 'text-red-600';
+    let label = 'Offline';
+    let Icon = WifiOff;
+    let desc = 'Koneksi terputus. Data disimpan di memori lokal.';
 
-    const current = statusMap[connectionStatus];
-    const Icon = current.icon;
+    if (connectionStatus === 'CONNECTED' && latency !== null) {
+      if (latency < 150) {
+        statusColor = 'bg-emerald-500';
+        textColor = 'text-emerald-600';
+        label = `Excellent (${latency}ms)`;
+        Icon = Wifi;
+        desc = 'Koneksi sangat cepat. Sinkronisasi real-time.';
+      } else if (latency < 400) {
+        statusColor = 'bg-amber-500';
+        textColor = 'text-amber-600';
+        label = `Fair (${latency}ms)`;
+        Icon = Wifi;
+        desc = 'Koneksi stabil namun sedikit lambat.';
+      } else {
+        statusColor = 'bg-orange-500';
+        textColor = 'text-orange-600';
+        label = `Slow (${latency}ms)`;
+        Icon = Activity;
+        desc = 'Koneksi lambat. Mungkin ada penundaan penyimpanan.';
+      }
+    } else if (connectionStatus === 'SYNCING') {
+      statusColor = 'bg-blue-500';
+      textColor = 'text-blue-600';
+      label = 'Syncing...';
+      Icon = RefreshCw;
+      desc = 'Sedang mengirim data ke server...';
+    }
 
     return (
-      <div className="relative group flex items-center bg-slate-50 border border-slate-200 py-1.5 pl-3 pr-4 rounded-full transition-all hover:bg-white hover:shadow-md cursor-help">
+      <div className="relative group flex items-center bg-slate-50 border border-slate-200 py-1.5 pl-3 pr-4 rounded-full transition-all hover:bg-white hover:shadow-md cursor-help select-none">
         <div className="relative flex mr-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${current.color} ${connectionStatus !== 'DISCONNECTED' && 'animate-ping opacity-75'} absolute`}></div>
-          <div className={`w-2.5 h-2.5 rounded-full ${current.color} relative`}></div>
+          {/* Ping Animation: Hanya aktif jika connected */}
+          {connectionStatus !== 'DISCONNECTED' && (
+             <div className={`w-2.5 h-2.5 rounded-full ${statusColor} absolute animate-ping opacity-75`}></div>
+          )}
+          <div className={`w-2.5 h-2.5 rounded-full ${statusColor} relative`}></div>
         </div>
         
-        <span className={`text-[10px] font-black uppercase tracking-widest ${
-          connectionStatus === 'CONNECTED' ? 'text-emerald-600' : 
-          connectionStatus === 'SYNCING' ? 'text-amber-600' : 'text-red-600'
-        }`}>
-          {current.label}
-        </span>
+        <div className="flex flex-col leading-none">
+           <span className={`text-[10px] font-black uppercase tracking-widest ${textColor}`}>
+             {label}
+           </span>
+        </div>
 
         {/* Fancy Tooltip */}
         <div className="absolute top-12 right-0 w-64 bg-[#132B41] text-white p-4 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-[100]">
            <div className="flex items-center space-x-3 mb-2">
-              <div className={`p-2 rounded-lg ${current.color} bg-opacity-20`}>
-                <Icon size={16} className={current.color.replace('bg-', 'text-')} />
+              <div className={`p-2 rounded-lg ${statusColor} bg-opacity-20`}>
+                <Icon size={16} className={statusColor.replace('bg-', 'text-')} />
               </div>
-              <p className="font-bold text-xs">{current.label}</p>
+              <div>
+                <p className="font-bold text-xs">{connectionStatus === 'CONNECTED' ? 'Server Online' : 'Terputus'}</p>
+                {latency && <p className="text-[10px] text-white/50">Ping: {latency}ms</p>}
+              </div>
            </div>
-           <p className="text-[10px] text-white/60 leading-relaxed">{current.desc}</p>
+           <p className="text-[10px] text-white/60 leading-relaxed border-t border-white/10 pt-2">{desc}</p>
            <div className="absolute -top-1.5 right-6 w-3 h-3 bg-[#132B41] rotate-45"></div>
         </div>
       </div>

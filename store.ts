@@ -10,6 +10,9 @@ import { generateId } from './utils';
  * jika tidak ada (local), gunakan localhost:3030.
  */
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3030/api';
+// Gunakan endpoint health untuk ping yang ringan
+const HEALTH_URL = (import.meta as any).env?.VITE_API_URL ? (import.meta as any).env?.VITE_API_URL.replace('/api', '/health') : 'http://localhost:3030/health';
+
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
 export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
@@ -32,6 +35,8 @@ interface AppState {
   setCurrentUser: (user: User | null) => void;
   connectionStatus: ConnectionStatus;
   setConnectionStatus: (status: ConnectionStatus) => void;
+  latency: number | null; // New: Menyimpan nilai ping dalam ms
+  checkLatency: () => Promise<void>; // New: Fungsi untuk cek ping
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   products: Product[];
@@ -63,6 +68,30 @@ export const useStore = create<AppState>()(
       setCurrentUser: (user) => set({ currentUser: user }),
       connectionStatus: 'CONNECTED',
       setConnectionStatus: (status) => set({ connectionStatus: status }),
+      latency: null,
+      checkLatency: async () => {
+        const start = Date.now();
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout 5 detik
+          
+          const res = await fetch(HEALTH_URL, { 
+            signal: controller.signal,
+            cache: 'no-store' 
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const end = Date.now();
+            set({ latency: end - start, connectionStatus: 'CONNECTED' });
+          } else {
+            set({ latency: null, connectionStatus: 'DISCONNECTED' });
+          }
+        } catch (err) {
+          set({ latency: null, connectionStatus: 'DISCONNECTED' });
+        }
+      },
+
       theme: 'light',
       toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
       
