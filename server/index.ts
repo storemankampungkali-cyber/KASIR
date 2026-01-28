@@ -1,22 +1,20 @@
+
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { pool, checkConnection } from './db';
 
 const app = express();
-const PORT = 3030;
+// Railway akan menentukan PORT secara dinamis melalui process.env.PORT
+const PORT = process.env.PORT || 3030;
 
-// Fix: Cast cors() as any to resolve "No overload matches this call" error caused by type incompatibility between @types/cors and express middleware
 app.use(cors() as any);
-// Fix: Cast express.json() as any to resolve "No overload matches this call" error on line 10 (Argument of type 'NextHandleFunction' is not assignable to parameter of type 'PathParams')
 app.use(express.json() as any);
 
-// Middlewares
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
-// --- PRODUCTS API ---
 app.get('/api/products', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM products ORDER BY category, name');
@@ -27,7 +25,6 @@ app.get('/api/products', async (req, res) => {
 });
 
 app.post('/api/products', async (req, res) => {
-  // Fix: Destructure using camelCase to correctly extract properties sent by the frontend's Product interface
   const { id, name, price, costPrice, category, isActive, outletId } = req.body;
   try {
     await pool.query(
@@ -41,7 +38,10 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
+// Tambahkan endpoint health check untuk Railway
+app.get('/health', (req, res) => res.send('OK'));
+
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
   checkConnection();
 });

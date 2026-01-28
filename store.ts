@@ -5,14 +5,11 @@ import { Product, CartItem, Transaction, Category, PaymentMethod, User } from '.
 import { generateId } from './utils';
 
 /**
- * STRATEGI PROXY VERCEL:
- * Di localhost, kita tembak langsung ke port 3030.
- * Di produksi (Vercel), kita gunakan relative path '/api'.
- * Vercel akan mem-proxy '/api' ke 'http://IP_VPS_KAMU:3030/api' berdasarkan vercel.json
+ * STRATEGI RAILWAY:
+ * Gunakan variabel lingkungan VITE_API_URL jika ada, 
+ * jika tidak ada (local), gunakan localhost:3030.
  */
-const API_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:3030/api' 
-  : '/api';
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3030/api';
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
 export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
@@ -79,7 +76,7 @@ export const useStore = create<AppState>()(
         } catch (err) {
           console.error('Fetch Products Error:', err);
           set({ connectionStatus: 'DISCONNECTED' });
-          get().addToast('ERROR', 'Gagal Terhubung', 'Server backend tidak merespon. Pastikan server sudah dinyalakan.');
+          get().addToast('ERROR', 'Gagal Terhubung', 'Server backend tidak merespon.');
         }
       },
       
@@ -97,7 +94,7 @@ export const useStore = create<AppState>()(
           set({ connectionStatus: 'CONNECTED' });
         } catch (err) {
           set({ connectionStatus: 'DISCONNECTED' });
-          get().addToast('ERROR', 'Sinkronisasi Gagal', 'Gagal menyimpan produk ke server.');
+          get().addToast('ERROR', 'Sinkronisasi Gagal', 'Gagal menyimpan produk.');
         }
       },
       
@@ -161,14 +158,14 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             await get().fetchTransactions();
             set({ connectionStatus: 'CONNECTED' });
-            get().addToast('SUCCESS', 'Tersinkron', 'Transaksi berhasil disimpan ke cloud.');
+            get().addToast('SUCCESS', 'Tersinkron', 'Transaksi berhasil disimpan.');
           } else {
              throw new Error('Save failed');
           }
         } catch (err) {
           set({ connectionStatus: 'DISCONNECTED' });
           set((state) => ({ transactions: [t, ...state.transactions] }));
-          get().addToast('INFO', 'Mode Offline', 'Transaksi disimpan lokal karena server tidak terjangkau.');
+          get().addToast('INFO', 'Mode Offline', 'Transaksi disimpan lokal.');
         }
       },
       
@@ -214,7 +211,7 @@ export const useStore = create<AppState>()(
       })),
     }),
     { 
-      name: 'angkringan-pos-v6',
+      name: 'angkringan-pos-railway',
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,

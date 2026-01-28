@@ -3,15 +3,18 @@ import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Memastikan .env dibaca dari direktori yang benar
-// Fix: Use process.cwd() instead of __dirname to avoid "Cannot find name '__dirname'" in environments where it's not defined (e.g., ESM or missing Node.js global types).
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+/**
+ * Railway menyediakan variabel lingkungan otomatis:
+ * MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE, MYSQLPORT
+ */
 export const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'angkringan_pos',
+  host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+  user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+  database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'angkringan_pos',
+  port: parseInt(process.env.MYSQLPORT || '3306'),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -19,18 +22,14 @@ export const pool = mysql.createPool({
   keepAliveInitialDelay: 0
 });
 
-// Helper to check connection
 export const checkConnection = async () => {
   try {
     const connection = await pool.getConnection();
-    console.log('✅ MySQL Connected Successfully');
-    console.log(`📡 Connected to: ${process.env.DB_NAME} on ${process.env.DB_HOST}`);
+    console.log('✅ MySQL Connected Successfully to Railway/Local');
     connection.release();
     return true;
   } catch (err: any) {
-    console.error('❌ MySQL Connection Failed:');
-    console.error(`Error Code: ${err.code}`);
-    console.error(`Message: ${err.message}`);
+    console.error('❌ MySQL Connection Failed:', err.message);
     return false;
   }
 };
