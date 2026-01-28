@@ -5,6 +5,7 @@ import { Product, CartItem, Transaction, Category, PaymentMethod, User } from '.
 import { generateId } from './utils';
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
+export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
 
 interface Toast {
   id: string;
@@ -22,6 +23,8 @@ interface QrisConfig {
 interface AppState {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
+  connectionStatus: ConnectionStatus;
+  setConnectionStatus: (status: ConnectionStatus) => void;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   products: Product[];
@@ -89,16 +92,30 @@ export const useStore = create<AppState>()(
     (set, get) => ({
       currentUser: { id: 'u1', name: 'Alfian Dimas', role: 'ADMIN', outletId: 'o1' },
       setCurrentUser: (user) => set({ currentUser: user }),
+      connectionStatus: 'CONNECTED',
+      setConnectionStatus: (status) => set({ connectionStatus: status }),
       theme: 'light',
       toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
       products: INITIAL_PRODUCTS,
       setProducts: (products) => set({ products }),
-      addProduct: (p) => set((state) => ({ 
-        products: [...state.products, { ...p, id: Math.random().toString(36).substr(2, 9) }] 
-      })),
-      updateProduct: (p) => set((state) => ({
-        products: state.products.map((item) => item.id === p.id ? p : item)
-      })),
+      addProduct: (p) => {
+        set({ connectionStatus: 'SYNCING' });
+        setTimeout(() => {
+          set((state) => ({ 
+            products: [...state.products, { ...p, id: Math.random().toString(36).substr(2, 9) }],
+            connectionStatus: 'CONNECTED'
+          }));
+        }, 1500);
+      },
+      updateProduct: (p) => {
+        set({ connectionStatus: 'SYNCING' });
+        setTimeout(() => {
+          set((state) => ({
+            products: state.products.map((item) => item.id === p.id ? p : item),
+            connectionStatus: 'CONNECTED'
+          }));
+        }, 1200);
+      },
       cart: [],
       addToCart: (p) => set((state) => {
         const existing = state.cart.find((item) => item.id === p.id);
@@ -119,10 +136,24 @@ export const useStore = create<AppState>()(
       })),
       clearCart: () => set({ cart: [] }),
       transactions: generateSamples(),
-      addTransaction: (t) => set((state) => ({ transactions: [t, ...state.transactions] })),
-      voidTransaction: (id, reason) => set((state) => ({
-        transactions: state.transactions.map((t) => t.id === id ? { ...t, status: 'VOIDED', voidReason: reason } : t)
-      })),
+      addTransaction: (t) => {
+        set({ connectionStatus: 'SYNCING' });
+        setTimeout(() => {
+          set((state) => ({ 
+            transactions: [t, ...state.transactions],
+            connectionStatus: 'CONNECTED'
+          }));
+        }, 2000);
+      },
+      voidTransaction: (id, reason) => {
+        set({ connectionStatus: 'SYNCING' });
+        setTimeout(() => {
+          set((state) => ({
+            transactions: state.transactions.map((t) => t.id === id ? { ...t, status: 'VOIDED', voidReason: reason } : t),
+            connectionStatus: 'CONNECTED'
+          }));
+        }, 1500);
+      },
       qrisConfig: { merchantName: 'ANGKRINGAN PRO', qrImageUrl: '', isActive: true },
       updateQrisConfig: (config) => set((state) => ({ qrisConfig: { ...state.qrisConfig, ...config } })),
       
