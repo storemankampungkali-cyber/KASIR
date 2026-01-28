@@ -1,0 +1,7 @@
+{
+  "name": "Angkringan POS - Pro",
+  "description": "A high-performance, mobile-first Point of Sale specifically designed for Indonesian Angkringan stalls, featuring quick transactions, multi-outlet scalability, and comprehensive reporting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
