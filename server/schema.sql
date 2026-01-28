@@ -1,17 +1,17 @@
 
 -- Database Schema for Angkringan POS Pro
-CREATE DATABASE IF NOT EXISTS angkringan_pos;
-USE angkringan_pos;
+-- CREATE DATABASE IF NOT EXISTS angkringan_pos; -- Di Railway DB otomatis dibuat
+-- USE angkringan_pos;
 
 -- Outlets Table
-CREATE TABLE outlets (
+CREATE TABLE IF NOT EXISTS outlets (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     address TEXT
 );
 
 -- Users Table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     role ENUM('ADMIN', 'CASHIER') DEFAULT 'CASHIER',
@@ -21,7 +21,7 @@ CREATE TABLE users (
 );
 
 -- Products Table
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     price DECIMAL(15, 2) NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE products (
 );
 
 -- Transactions Table
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
     id VARCHAR(50) PRIMARY KEY,
     subtotal DECIMAL(15, 2) NOT NULL,
     discount DECIMAL(15, 2) DEFAULT 0,
@@ -50,7 +50,7 @@ CREATE TABLE transactions (
 );
 
 -- Transaction Items Table (Snapshot of product data at purchase time)
-CREATE TABLE transaction_items (
+CREATE TABLE IF NOT EXISTS transaction_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     transaction_id VARCHAR(50),
     product_id VARCHAR(50),
@@ -63,12 +63,12 @@ CREATE TABLE transaction_items (
 );
 
 -- App Config Table (QRIS, etc)
-CREATE TABLE app_config (
+CREATE TABLE IF NOT EXISTS app_config (
     config_key VARCHAR(50) PRIMARY KEY,
     config_value JSON NOT NULL
 );
 
--- Seed Initial Data
-INSERT INTO outlets (id, name, address) VALUES ('o1', 'Angkringan Pusat', 'Jl. Malioboro No. 1');
-INSERT INTO users (id, name, role, outlet_id, pin) VALUES ('u1', 'Alfian Dimas', 'ADMIN', 'o1', '123456');
-INSERT INTO app_config (config_key, config_value) VALUES ('qris', '{"merchantName": "ANGKRINGAN PRO", "isActive": true, "qrImageUrl": ""}');
+-- Seed Initial Data (Gunakan IGNORE agar tidak error duplikat saat restart)
+INSERT IGNORE INTO outlets (id, name, address) VALUES ('o1', 'Angkringan Pusat', 'Jl. Malioboro No. 1');
+INSERT IGNORE INTO users (id, name, role, outlet_id, pin) VALUES ('u1', 'Alfian Dimas', 'ADMIN', 'o1', '123456');
+INSERT IGNORE INTO app_config (config_key, config_value) VALUES ('qris', '{"merchantName": "ANGKRINGAN PRO", "isActive": true, "qrImageUrl": ""}');
