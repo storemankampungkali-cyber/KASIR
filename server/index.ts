@@ -1,19 +1,39 @@
 
 import express from 'express';
 import cors from 'cors';
-import path from 'path'; // Import path untuk lokasi file
 import { pool, checkConnection, initDatabase } from './db';
 
 const app = express();
 const PORT = process.env.PORT || 3030;
 
-app.use(cors() as any);
+// Izinkan akses dari mana saja (Vercel, Localhost, dll)
+app.use(cors({
+  origin: '*', 
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}) as any);
+
 app.use(express.json() as any);
 
 // Logging middleware untuk Railway Logs
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
+});
+
+// --- ROOT ROUTE (Indikator Server Hidup) ---
+app.get('/', (req, res) => {
+  res.send(`
+    <div style="font-family: sans-serif; text-align: center; padding: 50px;">
+      <h1>🚀 Angkringan POS API is Running!</h1>
+      <p>Backend siap melayani request.</p>
+      <p>Gunakan Frontend di Vercel untuk mengakses aplikasi.</p>
+    </div>
+  `);
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'UP', timestamp: new Date().toISOString() });
 });
 
 // --- API ROUTES ---
@@ -90,26 +110,8 @@ app.put('/api/config/qris', async (req, res) => {
   }
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'UP', timestamp: new Date().toISOString() });
-});
-
-// --- INTEGRASI FRONTEND (SERVE STATIC FILES) ---
-// Bagian ini penting agar saat buka URL di browser, yang muncul adalah web App-nya
-const frontendPath = path.resolve((process as any).cwd(), 'dist');
-
-// 1. Serve file statis (CSS, JS, Gambar) dari folder dist
-app.use(express.static(frontendPath));
-
-// 2. Catch-all Route: Apapun URL-nya (selain /api), kirimkan index.html
-// Ini wajib untuk React Router (SPA) agar tidak 404 saat refresh halaman
-app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendPath, 'index.html'));
-});
-
 app.listen(PORT, async () => {
   console.log(`🚀 Backend Angkringan running on port ${PORT}`);
-  console.log(`📂 Serving Frontend from: ${frontendPath}`);
   
   // Jalankan inisialisasi database otomatis
   await initDatabase();
