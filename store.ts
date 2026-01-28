@@ -4,8 +4,15 @@ import { persist } from 'zustand/middleware';
 import { Product, CartItem, Transaction, Category, PaymentMethod, User } from './types';
 import { generateId } from './utils';
 
-// Menggunakan env variable jika ada, jika tidak fallback ke localhost
-const API_URL = 'http://localhost:3030/api';
+/**
+ * STRATEGI PROXY VERCEL:
+ * Di localhost, kita tembak langsung ke port 3030.
+ * Di produksi (Vercel), kita gunakan relative path '/api'.
+ * Vercel akan mem-proxy '/api' ke 'http://IP_VPS_KAMU:3030/api' berdasarkan vercel.json
+ */
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3030/api' 
+  : '/api';
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
 export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
@@ -140,7 +147,6 @@ export const useStore = create<AppState>()(
         } catch (err) {
           console.error('Fetch Transactions Error:', err);
           set({ connectionStatus: 'DISCONNECTED' });
-          // Jangan kirim toast dobel jika fetchProducts sudah mengirim
         }
       },
       
@@ -161,7 +167,6 @@ export const useStore = create<AppState>()(
           }
         } catch (err) {
           set({ connectionStatus: 'DISCONNECTED' });
-          // Fallback ke local state jika server down agar kasir tetap bisa kerja
           set((state) => ({ transactions: [t, ...state.transactions] }));
           get().addToast('INFO', 'Mode Offline', 'Transaksi disimpan lokal karena server tidak terjangkau.');
         }
