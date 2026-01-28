@@ -4,7 +4,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Memastikan .env dibaca dari direktori yang benar
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+// Fix: Use process.cwd() instead of __dirname to avoid "Cannot find name '__dirname'" in environments where it's not defined (e.g., ESM or missing Node.js global types).
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 export const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',

@@ -19,7 +19,8 @@
     "mysql2": "^3.16.2",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "cors": "^2.8.6"
+    "cors": "^2.8.6",
+    "path": "^0.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
