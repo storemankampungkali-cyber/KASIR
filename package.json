@@ -15,7 +15,11 @@
     "lucide-react": "^0.563.0",
     "zustand": "^5.0.10",
     "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2"
+    "jspdf-autotable": "^3.8.2",
+    "mysql2": "^3.16.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "cors": "^2.8.6"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

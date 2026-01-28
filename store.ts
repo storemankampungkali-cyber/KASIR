@@ -4,6 +4,9 @@ import { persist } from 'zustand/middleware';
 import { Product, CartItem, Transaction, Category, PaymentMethod, User } from './types';
 import { generateId } from './utils';
 
+// Menggunakan env variable jika ada, jika tidak fallback ke localhost
+const API_URL = 'http://localhost:3030/api';
+
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
 export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
 
@@ -28,9 +31,9 @@ interface AppState {
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   products: Product[];
-  setProducts: (products: Product[]) => void;
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  updateProduct: (product: Product) => void;
+  fetchProducts: () => Promise<void>;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  updateProduct: (product: Product) => Promise<void>;
   cart: CartItem[];
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
@@ -39,53 +42,15 @@ interface AppState {
   updateItemNote: (productId: string, note: string) => void;
   clearCart: () => void;
   transactions: Transaction[];
-  addTransaction: (transaction: Transaction) => void;
-  voidTransaction: (id: string, reason: string) => void;
+  fetchTransactions: () => Promise<void>;
+  addTransaction: (transaction: Transaction) => Promise<void>;
+  voidTransaction: (id: string, reason: string) => Promise<void>;
   qrisConfig: QrisConfig;
-  updateQrisConfig: (config: Partial<QrisConfig>) => void;
-  // Toast Logic
+  updateQrisConfig: (config: Partial<QrisConfig>) => Promise<void>;
   toasts: Toast[];
   addToast: (type: ToastType, title: string, message: string) => void;
   removeToast: (id: string) => void;
 }
-
-const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', name: 'Nasi Kucing Sambal Teri', price: 3000, costPrice: 1800, category: Category.MAKANAN, isActive: true, outletId: 'o1' },
-  { id: '2', name: 'Nasi Kucing Ayam Suwir', price: 3500, costPrice: 2000, category: Category.MAKANAN, isActive: true, outletId: 'o1' },
-  { id: '3', name: 'Es Teh Manis', price: 4000, costPrice: 1200, category: Category.MINUMAN, isActive: true, outletId: 'o1' },
-  { id: '4', name: 'Kopi Hitam', price: 3000, costPrice: 1000, category: Category.MINUMAN, isActive: true, outletId: 'o1' },
-  { id: '5', name: 'Sate Usus', price: 2000, costPrice: 900, category: Category.SATE, isActive: true, outletId: 'o1' },
-  { id: '6', name: 'Sate Telur Puyuh', price: 3000, costPrice: 1500, category: Category.SATE, isActive: true, outletId: 'o1' },
-  { id: '7', name: 'Sate Ati Ampela', price: 3000, costPrice: 1600, category: Category.SATE, isActive: true, outletId: 'o1' },
-  { id: '8', name: 'Wedang Jahe', price: 5000, costPrice: 1500, category: Category.MINUMAN, isActive: true, outletId: 'o1' },
-  { id: '9', name: 'Gorengan Tempe', price: 1000, costPrice: 400, category: Category.LAINNYA, isActive: true, outletId: 'o1' },
-  { id: '10', name: 'Kerupuk Putih', price: 1000, costPrice: 300, category: Category.LAINNYA, isActive: true, outletId: 'o1' },
-];
-
-const generateSamples = (): Transaction[] => {
-  const samples: Transaction[] = [];
-  const now = new Date();
-  for (let i = 0; i < 20; i++) {
-    const date = new Date();
-    date.setHours(now.getHours() - i);
-    const item = INITIAL_PRODUCTS[Math.floor(Math.random() * INITIAL_PRODUCTS.length)];
-    const qty = Math.floor(Math.random() * 5) + 1;
-    const total = item.price * qty;
-    samples.push({
-      id: generateId(),
-      items: [{ ...item, quantity: qty }],
-      subtotal: total,
-      discount: 0,
-      total: total,
-      paymentMethod: i % 3 === 0 ? PaymentMethod.QRIS : PaymentMethod.TUNAI,
-      createdAt: date.toISOString(),
-      outletId: 'o1',
-      cashierId: 'u1',
-      status: 'COMPLETED'
-    });
-  }
-  return samples;
-};
 
 export const useStore = create<AppState>()(
   persist(
@@ -96,26 +61,55 @@ export const useStore = create<AppState>()(
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       theme: 'light',
       toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
-      products: INITIAL_PRODUCTS,
-      setProducts: (products) => set({ products }),
-      addProduct: (p) => {
-        set({ connectionStatus: 'SYNCING' });
-        setTimeout(() => {
-          set((state) => ({ 
-            products: [...state.products, { ...p, id: Math.random().toString(36).substr(2, 9) }],
-            connectionStatus: 'CONNECTED'
-          }));
-        }, 1500);
+      
+      products: [],
+      fetchProducts: async () => {
+        try {
+          const res = await fetch(`${API_URL}/products`);
+          if (!res.ok) throw new Error('Response not OK');
+          const data = await res.json();
+          set({ products: data, connectionStatus: 'CONNECTED' });
+        } catch (err) {
+          console.error('Fetch Products Error:', err);
+          set({ connectionStatus: 'DISCONNECTED' });
+          get().addToast('ERROR', 'Gagal Terhubung', 'Server backend tidak merespon. Pastikan server sudah dinyalakan.');
+        }
       },
-      updateProduct: (p) => {
+      
+      addProduct: async (p) => {
         set({ connectionStatus: 'SYNCING' });
-        setTimeout(() => {
-          set((state) => ({
-            products: state.products.map((item) => item.id === p.id ? p : item),
-            connectionStatus: 'CONNECTED'
-          }));
-        }, 1200);
+        const newProduct = { ...p, id: generateId() };
+        try {
+          const res = await fetch(`${API_URL}/products`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newProduct)
+          });
+          if (!res.ok) throw new Error('Create failed');
+          await get().fetchProducts();
+          set({ connectionStatus: 'CONNECTED' });
+        } catch (err) {
+          set({ connectionStatus: 'DISCONNECTED' });
+          get().addToast('ERROR', 'Sinkronisasi Gagal', 'Gagal menyimpan produk ke server.');
+        }
       },
+      
+      updateProduct: async (p) => {
+        set({ connectionStatus: 'SYNCING' });
+        try {
+          const res = await fetch(`${API_URL}/products/${p.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(p)
+          });
+          if (!res.ok) throw new Error('Update failed');
+          await get().fetchProducts();
+          set({ connectionStatus: 'CONNECTED' });
+        } catch (err) {
+          set({ connectionStatus: 'DISCONNECTED' });
+        }
+      },
+
       cart: [],
       addToCart: (p) => set((state) => {
         const existing = state.cart.find((item) => item.id === p.id);
@@ -135,29 +129,73 @@ export const useStore = create<AppState>()(
         cart: state.cart.map((item) => item.id === id ? { ...item, note } : item)
       })),
       clearCart: () => set({ cart: [] }),
-      transactions: generateSamples(),
-      addTransaction: (t) => {
-        set({ connectionStatus: 'SYNCING' });
-        setTimeout(() => {
-          set((state) => ({ 
-            transactions: [t, ...state.transactions],
-            connectionStatus: 'CONNECTED'
-          }));
-        }, 2000);
+
+      transactions: [],
+      fetchTransactions: async () => {
+        try {
+          const res = await fetch(`${API_URL}/transactions`);
+          if (!res.ok) throw new Error('Response not OK');
+          const data = await res.json();
+          set({ transactions: data, connectionStatus: 'CONNECTED' });
+        } catch (err) {
+          console.error('Fetch Transactions Error:', err);
+          set({ connectionStatus: 'DISCONNECTED' });
+          // Jangan kirim toast dobel jika fetchProducts sudah mengirim
+        }
       },
-      voidTransaction: (id, reason) => {
-        set({ connectionStatus: 'SYNCING' });
-        setTimeout(() => {
-          set((state) => ({
-            transactions: state.transactions.map((t) => t.id === id ? { ...t, status: 'VOIDED', voidReason: reason } : t),
-            connectionStatus: 'CONNECTED'
-          }));
-        }, 1500);
-      },
-      qrisConfig: { merchantName: 'ANGKRINGAN PRO', qrImageUrl: '', isActive: true },
-      updateQrisConfig: (config) => set((state) => ({ qrisConfig: { ...state.qrisConfig, ...config } })),
       
-      // Toast Implementation
+      addTransaction: async (t) => {
+        set({ connectionStatus: 'SYNCING' });
+        try {
+          const res = await fetch(`${API_URL}/transactions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(t)
+          });
+          if (res.ok) {
+            await get().fetchTransactions();
+            set({ connectionStatus: 'CONNECTED' });
+            get().addToast('SUCCESS', 'Tersinkron', 'Transaksi berhasil disimpan ke cloud.');
+          } else {
+             throw new Error('Save failed');
+          }
+        } catch (err) {
+          set({ connectionStatus: 'DISCONNECTED' });
+          // Fallback ke local state jika server down agar kasir tetap bisa kerja
+          set((state) => ({ transactions: [t, ...state.transactions] }));
+          get().addToast('INFO', 'Mode Offline', 'Transaksi disimpan lokal karena server tidak terjangkau.');
+        }
+      },
+      
+      voidTransaction: async (id, reason) => {
+        set({ connectionStatus: 'SYNCING' });
+        try {
+          const res = await fetch(`${API_URL}/transactions/${id}/void`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voidReason: reason })
+          });
+          if (!res.ok) throw new Error('Void failed');
+          await get().fetchTransactions();
+          set({ connectionStatus: 'CONNECTED' });
+        } catch (err) {
+          set({ connectionStatus: 'DISCONNECTED' });
+        }
+      },
+
+      qrisConfig: { merchantName: 'ANGKRINGAN PRO', qrImageUrl: '', isActive: true },
+      updateQrisConfig: async (config) => {
+        const newConfig = { ...get().qrisConfig, ...config };
+        set({ qrisConfig: newConfig });
+        try {
+          await fetch(`${API_URL}/config/qris`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newConfig)
+          });
+        } catch (err) {}
+      },
+      
       toasts: [],
       addToast: (type, title, message) => {
         const id = Math.random().toString(36).substring(2, 9);
@@ -171,12 +209,10 @@ export const useStore = create<AppState>()(
       })),
     }),
     { 
-      name: 'angkringan-pos-v5',
+      name: 'angkringan-pos-v6',
       partialize: (state) => ({
         currentUser: state.currentUser,
-        products: state.products,
-        transactions: state.transactions,
-        qrisConfig: state.qrisConfig,
+        theme: state.theme,
       })
     }
   )

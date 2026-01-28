@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Cashier from './pages/Cashier';
@@ -11,7 +11,14 @@ import { useStore } from './store';
 
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
-  const { currentUser, addToast } = useStore();
+  const { currentUser, addToast, fetchProducts, fetchTransactions } = useStore();
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchProducts();
+      fetchTransactions();
+    }
+  }, [currentUser, fetchProducts, fetchTransactions]);
 
   const handleLogin = () => {
     useStore.getState().setCurrentUser({ id: 'u1', name: 'Alfian Dimas', role: 'ADMIN', outletId: 'o1' });
