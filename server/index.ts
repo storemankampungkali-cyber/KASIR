@@ -32,8 +32,24 @@ app.get('/', (req, res) => {
   `);
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'UP', timestamp: new Date().toISOString() });
+// --- HEALTH CHECK YANG LEBIH PINTAR ---
+app.get('/health', async (req, res) => {
+  try {
+    // Coba ping database
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'UP', 
+      database: 'CONNECTED', 
+      timestamp: new Date().toISOString() 
+    });
+  } catch (err: any) {
+    console.error('Health Check DB Failed:', err.message);
+    res.status(500).json({ 
+      status: 'DOWN', 
+      database: 'DISCONNECTED', 
+      error: err.message 
+    });
+  }
 });
 
 // --- API ROUTES ---
@@ -43,7 +59,7 @@ app.get('/api/products', async (req, res) => {
     res.json(rows);
   } catch (err: any) {
     console.error('DB Error:', err.message);
-    res.status(500).json({ error: 'Gagal mengambil data produk' });
+    res.status(500).json({ error: 'Gagal mengambil data produk', details: err.message });
   }
 });
 
@@ -65,7 +81,8 @@ app.get('/api/transactions', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM transactions ORDER BY created_at DESC LIMIT 100');
     res.json(rows);
-  } catch (err) {
+  } catch (err: any) {
+    console.error('Transactions Error:', err.message);
     res.status(500).json({ error: 'Gagal mengambil transaksi' });
   }
 });

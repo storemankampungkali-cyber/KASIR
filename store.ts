@@ -5,14 +5,22 @@ import { Product, CartItem, Transaction, Category, PaymentMethod, User } from '.
 import { generateId } from './utils';
 
 /**
- * STRATEGI RAILWAY:
- * Gunakan variabel lingkungan VITE_API_URL jika ada, 
- * jika tidak ada (local), gunakan localhost:3030.
+ * STRATEGI URL:
+ * Memastikan URL bersih dari trailing slash (/) agar penggabungan string tidak error (//api).
  */
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3030/api';
-// Gunakan endpoint health untuk ping yang ringan
-const HEALTH_URL = (import.meta as any).env?.VITE_API_URL ? (import.meta as any).env?.VITE_API_URL.replace('/api', '/health') : 'http://localhost:3030/health';
+const getBaseUrl = () => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (!envUrl) return 'http://localhost:3030/api';
+  
+  // Hapus tanda / di akhir jika ada
+  return envUrl.replace(/\/$/, '');
+};
 
+const API_URL = getBaseUrl();
+// Health URL: Ganti /api dengan /health, atau tambahkan /health jika tidak ada /api
+const HEALTH_URL = API_URL.endsWith('/api') 
+  ? API_URL.replace('/api', '/health') 
+  : `${API_URL}/health`;
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
 export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
@@ -35,8 +43,8 @@ interface AppState {
   setCurrentUser: (user: User | null) => void;
   connectionStatus: ConnectionStatus;
   setConnectionStatus: (status: ConnectionStatus) => void;
-  latency: number | null; // New: Menyimpan nilai ping dalam ms
-  checkLatency: () => Promise<void>; // New: Fungsi untuk cek ping
+  latency: number | null; 
+  checkLatency: () => Promise<void>; 
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   products: Product[];
@@ -69,12 +77,14 @@ export const useStore = create<AppState>()(
       connectionStatus: 'CONNECTED',
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       latency: null,
+      
       checkLatency: async () => {
         const start = Date.now();
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout 5 detik
+          const timeoutId = setTimeout(() => controller.abort(), 8000); 
           
+          console.log(`Checking connection to: ${HEALTH_URL}`);
           const res = await fetch(HEALTH_URL, { 
             signal: controller.signal,
             cache: 'no-store' 
@@ -83,11 +93,21 @@ export const useStore = create<AppState>()(
 
           if (res.ok) {
             const end = Date.now();
-            set({ latency: end - start, connectionStatus: 'CONNECTED' });
+            const data = await res.json().catch(() => ({}));
+            
+            // Logika baru: Jika Backend OK tapi Database Mati, tetap anggap Disconnected
+            if (data.database === 'DISCONNECTED' || data.status === 'DOWN') {
+               console.warn('Backend UP but Database DOWN');
+               set({ latency: null, connectionStatus: 'DISCONNECTED' });
+            } else {
+               set({ latency: end - start, connectionStatus: 'CONNECTED' });
+            }
           } else {
+            console.error('Health Check Failed:', res.status, res.statusText);
             set({ latency: null, connectionStatus: 'DISCONNECTED' });
           }
         } catch (err) {
+          console.error('Network unreachable:', err);
           set({ latency: null, connectionStatus: 'DISCONNECTED' });
         }
       },
@@ -98,14 +118,18 @@ export const useStore = create<AppState>()(
       products: [],
       fetchProducts: async () => {
         try {
+          console.log(`Fetching products from: ${API_URL}/products`);
           const res = await fetch(`${API_URL}/products`);
-          if (!res.ok) throw new Error('Response not OK');
+          if (!res.ok) {
+             const errorText = await res.text();
+             throw new Error(`Server Error (${res.status}): ${errorText}`);
+          }
           const data = await res.json();
           set({ products: data, connectionStatus: 'CONNECTED' });
         } catch (err) {
           console.error('Fetch Products Error:', err);
           set({ connectionStatus: 'DISCONNECTED' });
-          get().addToast('ERROR', 'Gagal Terhubung', 'Server backend tidak merespon.');
+          get().addToast('ERROR', 'Gagal Terhubung', 'Gagal memuat produk. Backend mungkin sedang restart.');
         }
       },
       
