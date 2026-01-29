@@ -12,12 +12,8 @@ const getBaseUrl = () => {
 };
 
 const API_URL = getBaseUrl();
-const HEALTH_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-  ? 'http://localhost:3030/health' 
-  : '/health';
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
-export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
 
 interface Toast {
   id: string;
@@ -26,21 +22,15 @@ interface Toast {
   message: string;
 }
 
-interface QrisConfig {
-  merchantName: string;
-  qrImageUrl: string;
-  isActive: boolean;
-}
-
 interface AppState {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
-  connectionStatus: ConnectionStatus;
-  setConnectionStatus: (status: ConnectionStatus) => void;
-  latency: number | null; 
-  checkLatency: () => Promise<void>; 
+  connectionStatus: 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
+  // Added setConnectionStatus to AppState
+  setConnectionStatus: (status: 'CONNECTED' | 'SYNCING' | 'DISCONNECTED') => void;
+  latency: number | null;
+  checkLatency: () => Promise<void>;
   theme: 'light' | 'dark';
-  toggleTheme: () => void;
   products: Product[];
   fetchProducts: () => Promise<void>;
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
@@ -49,15 +39,11 @@ interface AppState {
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, delta: number) => void;
-  updateItemPrice: (productId: string, newPrice: number) => void;
-  updateItemNote: (productId: string, note: string) => void;
   clearCart: () => void;
   transactions: Transaction[];
   fetchTransactions: () => Promise<void>;
   addTransaction: (transaction: Transaction) => Promise<void>;
   voidTransaction: (id: string, reason: string) => Promise<void>;
-  qrisConfig: QrisConfig;
-  updateQrisConfig: (config: Partial<QrisConfig>) => Promise<void>;
   toasts: Toast[];
   addToast: (type: ToastType, title: string, message: string) => void;
   removeToast: (id: string) => void;
@@ -69,138 +55,103 @@ export const useStore = create<AppState>()(
       currentUser: { id: 'u1', name: 'Alfian Dimas', role: 'ADMIN', outletId: 'o1' },
       setCurrentUser: (user) => set({ currentUser: user }),
       connectionStatus: 'CONNECTED',
+      // Implemented setConnectionStatus
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       latency: null,
+      theme: 'light',
       
       checkLatency: async () => {
         const start = Date.now();
         try {
-          const res = await fetch(HEALTH_URL, { cache: 'no-store' });
-          if (res.ok) {
-            const end = Date.now();
-            const data = await res.json();
-            if (data && data.database === 'CONNECTED') {
-              set({ latency: end - start, connectionStatus: 'CONNECTED' });
-            } else {
-              set({ latency: null, connectionStatus: 'DISCONNECTED' });
-            }
-          } else {
-            set({ latency: null, connectionStatus: 'DISCONNECTED' });
-          }
-        } catch (err) {
-          set({ latency: null, connectionStatus: 'DISCONNECTED' });
-        }
+          const res = await fetch(`${API_URL.replace('/api', '')}/health`);
+          if (res.ok) set({ latency: Date.now() - start, connectionStatus: 'CONNECTED' });
+        } catch { set({ connectionStatus: 'DISCONNECTED', latency: null }); }
       },
 
-      theme: 'light',
-      toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
-      
       products: [],
       fetchProducts: async () => {
         try {
           const res = await fetch(`${API_URL}/products`);
-          if (!res.ok) throw new Error(`Server error: ${res.status}`);
-          const rawData = await res.json();
-          if (!Array.isArray(rawData)) return;
-          const normalizedProducts = rawData.map((p: any) => ({
-            id: p.id || generateId(),
-            name: p.name || 'Tanpa Nama',
-            price: Number(p.price || 0),
-            costPrice: Number(p.costPrice ?? p.cost_price ?? 0),
-            category: p.category || 'Lainnya',
-            isActive: p.isActive === true || p.isActive === 1,
-            outletId: p.outletId ?? p.outlet_id ?? 'o1'
-          }));
-          set({ products: normalizedProducts, connectionStatus: 'CONNECTED' });
-        } catch (err: any) {
-          set({ connectionStatus: 'DISCONNECTED' });
-        }
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            set({ products: data.map((p: any) => ({
+              ...p,
+              price: Number(p.price),
+              costPrice: Number(p.costPrice || 0)
+            })) });
+          }
+        } catch (err) {}
       },
-      
+
       addProduct: async (p) => {
-        set({ connectionStatus: 'SYNCING' });
-        const newProduct = { ...p, id: generateId() };
         try {
           const res = await fetch(`${API_URL}/products`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newProduct)
+            body: JSON.stringify({ ...p, id: generateId() })
           });
-          if (!res.ok) throw new Error('Create failed');
-          await get().fetchProducts();
-          get().addToast('SUCCESS', 'Tersimpan', `${newProduct.name} berhasil ditambahkan.`);
-        } catch (err: any) {
-          get().addToast('ERROR', 'Gagal', 'Gagal menyimpan ke server.');
-        }
+          if (res.ok) await get().fetchProducts();
+        } catch (err) {}
       },
-      
+
       updateProduct: async (p) => {
-        set({ connectionStatus: 'SYNCING' });
         try {
-          const res = await fetch(`${API_URL}/products/${p.id}`, {
+          await fetch(`${API_URL}/products/${p.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(p)
           });
-          if (!res.ok) throw new Error('Update failed');
           await get().fetchProducts();
-        } catch (err) {
-          set({ connectionStatus: 'DISCONNECTED' });
-        }
+        } catch (err) {}
       },
 
       cart: [],
       addToCart: (p) => set((state) => {
         const existing = state.cart.find((item) => item.id === p.id);
-        if (existing) {
-          return { cart: state.cart.map((item) => item.id === p.id ? { ...item, quantity: item.quantity + 1 } : item) };
-        }
+        if (existing) return { cart: state.cart.map((item) => item.id === p.id ? { ...item, quantity: item.quantity + 1 } : item) };
         return { cart: [...state.cart, { ...p, quantity: 1 }] };
       }),
       removeFromCart: (id) => set((state) => ({ cart: state.cart.filter((item) => item.id !== id) })),
       updateQuantity: (id, delta) => set((state) => ({
         cart: state.cart.map((item) => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item)
       })),
-      updateItemPrice: (id, price) => set((state) => ({
-        cart: state.cart.map((item) => item.id === id ? { ...item, price } : item)
-      })),
-      updateItemNote: (id, note) => set((state) => ({
-        cart: state.cart.map((item) => item.id === id ? { ...item, note } : item)
-      })),
       clearCart: () => set({ cart: [] }),
 
       transactions: [],
       fetchTransactions: async () => {
         try {
-          console.log('[STORE] Refreshing transactions...');
           const res = await fetch(`${API_URL}/transactions`);
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-              console.log('[STORE] Transactions data received:', data.length);
-              
-              const normalizedTx = data.map((t: any) => ({
-                ...t,
-                // KRITIS: Pastikan items selalu array dan harganya berupa Number
-                items: Array.isArray(t.items) ? t.items.map((item: any) => ({
-                  ...item,
-                  price: Number(item.price || 0),
-                  costPrice: Number(item.costPrice ?? item.cost_price ?? 0),
-                  quantity: Number(item.quantity || 0)
-                })) : [],
-                total: Number(t.total || 0),
-                subtotal: Number(t.subtotal || 0),
-                discount: Number(t.discount || 0)
+              // Sinkronisasi data ke tipe data Frontend yang benar
+              const normalized = data.map((t: any) => ({
+                id: t.id,
+                subtotal: Number(t.subtotal),
+                discount: Number(t.discount),
+                total: Number(t.total),
+                paymentMethod: t.paymentMethod,
+                customerName: t.customerName,
+                status: t.status,
+                createdAt: t.createdAt,
+                outletId: t.outletId,
+                cashierId: t.cashierId,
+                voidReason: t.voidReason,
+                items: Array.isArray(t.items) ? t.items.map((i: any) => ({
+                  id: i.id,
+                  name: i.name,
+                  price: Number(i.price),
+                  costPrice: Number(i.costPrice),
+                  quantity: Number(i.quantity)
+                })) : []
               }));
-              
-              set({ transactions: normalizedTx });
+              set({ transactions: normalized });
+              console.log('[STORE] History Updated:', normalized.length);
             }
           }
-        } catch (err) {
-          console.error('[STORE] Fetch transactions error:', err);
-        }
+        } catch (err) {}
       },
-      
+
       addTransaction: async (t) => {
         set({ connectionStatus: 'SYNCING' });
         try {
@@ -209,43 +160,21 @@ export const useStore = create<AppState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(t)
           });
-          if (res.ok) {
-            await get().fetchTransactions();
-          } else {
-            get().addToast('ERROR', 'Gagal', 'Gagal menyimpan transaksi ke server.');
-          }
-        } catch (err) {
-          set({ connectionStatus: 'DISCONNECTED' });
-        }
+          if (res.ok) await get().fetchTransactions();
+        } catch (err) {}
       },
-      
+
       voidTransaction: async (id, reason) => {
         try {
-          const res = await fetch(`${API_URL}/transactions/${id}/void`, {
+          await fetch(`${API_URL}/transactions/${id}/void`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ voidReason: reason })
           });
-          if (res.ok) {
-            await get().fetchTransactions();
-            get().addToast('INFO', 'Dibatalkan', `Transaksi #${id} di-void.`);
-          }
+          await get().fetchTransactions();
         } catch (err) {}
       },
 
-      qrisConfig: { merchantName: 'ANGKRINGAN PRO', qrImageUrl: '', isActive: true },
-      updateQrisConfig: async (config) => {
-        const newConfig = { ...get().qrisConfig, ...config };
-        set({ qrisConfig: newConfig });
-        try {
-          await fetch(`${API_URL}/config/qris`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newConfig)
-          });
-        } catch (err) {}
-      },
-      
       toasts: [],
       addToast: (type, title, message) => {
         const id = Math.random().toString(36).substring(2, 9);
@@ -255,11 +184,8 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-v10', // Reset local storage v10
-      partialize: (state) => ({
-        currentUser: state.currentUser,
-        theme: state.theme,
-      })
+      name: 'angkringan-pos-vFinal', // Reset storage total
+      partialize: (state) => ({ currentUser: state.currentUser, theme: state.theme })
     }
   )
 );

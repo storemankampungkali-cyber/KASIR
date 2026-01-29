@@ -55,7 +55,7 @@ const SCHEMA_QUERIES = [
   `CREATE TABLE IF NOT EXISTS products (
       id VARCHAR(50) PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
-      price DECIMAL(15, 2) NOT NULL,
+      price DECIMAL(15, 2) NOT NULL DEFAULT 0,
       cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
       category VARCHAR(50) NOT NULL,
       is_active BOOLEAN DEFAULT TRUE,
@@ -64,9 +64,9 @@ const SCHEMA_QUERIES = [
   )`,
   `CREATE TABLE IF NOT EXISTS transactions (
       id VARCHAR(50) PRIMARY KEY,
-      subtotal DECIMAL(15, 2) NOT NULL,
+      subtotal DECIMAL(15, 2) NOT NULL DEFAULT 0,
       discount DECIMAL(15, 2) DEFAULT 0,
-      total DECIMAL(15, 2) NOT NULL,
+      total DECIMAL(15, 2) NOT NULL DEFAULT 0,
       payment_method VARCHAR(20) NOT NULL,
       customer_name VARCHAR(100),
       status ENUM('COMPLETED', 'VOIDED') DEFAULT 'COMPLETED',
@@ -82,9 +82,9 @@ const SCHEMA_QUERIES = [
       transaction_id VARCHAR(50),
       product_id VARCHAR(50),
       name VARCHAR(255) NOT NULL,
-      price DECIMAL(15, 2) NOT NULL,
+      price DECIMAL(15, 2) NOT NULL DEFAULT 0,
       cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
-      quantity INT NOT NULL,
+      quantity INT NOT NULL DEFAULT 1,
       note TEXT,
       FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
   )`,
@@ -96,29 +96,14 @@ export const initDatabase = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    console.log('🔄 Menjalankan sinkronisasi skema database...');
-    
+    console.log('🔄 Reset & Sync Database Schema...');
     for (const query of SCHEMA_QUERIES) {
       await connection.query(query);
     }
-    
-    // Verifikasi Kolom cost_price (Double Check)
-    const [tiCols]: any = await connection.query("SHOW COLUMNS FROM transaction_items LIKE 'cost_price'");
-    if (tiCols.length === 0) {
-      console.log('⚠️ Kolom cost_price hilang di transaction_items. Memperbaiki...');
-      await connection.query("ALTER TABLE transaction_items ADD COLUMN cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0 AFTER price");
-    }
-
-    const [pCols]: any = await connection.query("SHOW COLUMNS FROM products LIKE 'cost_price'");
-    if (pCols.length === 0) {
-      console.log('⚠️ Kolom cost_price hilang di products. Memperbaiki...');
-      await connection.query("ALTER TABLE products ADD COLUMN cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0 AFTER price");
-    }
-
-    console.log('✅ Database terverifikasi dan siap digunakan!');
+    console.log('✅ Database Ready.');
     return true;
   } catch (err: any) {
-    console.error('❌ Database Init Error:', err.message);
+    console.error('❌ Database Error:', err.message);
     return false;
   } finally {
     if (connection) connection.release();
