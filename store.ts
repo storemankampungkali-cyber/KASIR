@@ -26,7 +26,6 @@ interface AppState {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
   connectionStatus: 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
-  // Added setConnectionStatus to AppState
   setConnectionStatus: (status: 'CONNECTED' | 'SYNCING' | 'DISCONNECTED') => void;
   latency: number | null;
   checkLatency: () => Promise<void>;
@@ -55,7 +54,6 @@ export const useStore = create<AppState>()(
       currentUser: { id: 'u1', name: 'Alfian Dimas', role: 'ADMIN', outletId: 'o1' },
       setCurrentUser: (user) => set({ currentUser: user }),
       connectionStatus: 'CONNECTED',
-      // Implemented setConnectionStatus
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       latency: null,
       theme: 'light',
@@ -76,8 +74,8 @@ export const useStore = create<AppState>()(
           if (Array.isArray(data)) {
             set({ products: data.map((p: any) => ({
               ...p,
-              price: Number(p.price),
-              costPrice: Number(p.costPrice || 0)
+              price: Number(p.price || 0),
+              costPrice: Number(p.costPrice || p.cost_price || 0)
             })) });
           }
         } catch (err) {}
@@ -124,29 +122,27 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-              // Sinkronisasi data ke tipe data Frontend yang benar
               const normalized = data.map((t: any) => ({
                 id: t.id,
-                subtotal: Number(t.subtotal),
-                discount: Number(t.discount),
-                total: Number(t.total),
-                paymentMethod: t.paymentMethod,
-                customerName: t.customerName,
+                subtotal: Number(t.subtotal || 0),
+                discount: Number(t.discount || 0),
+                total: Number(t.total || 0),
+                paymentMethod: t.paymentMethod || t.payment_method,
+                customerName: t.customerName || t.customer_name,
                 status: t.status,
-                createdAt: t.createdAt,
-                outletId: t.outletId,
-                cashierId: t.cashierId,
-                voidReason: t.voidReason,
+                createdAt: t.createdAt || t.created_at,
+                outletId: t.outletId || t.outlet_id,
+                cashierId: t.cashierId || t.cashier_id,
+                voidReason: t.voidReason || t.void_reason,
                 items: Array.isArray(t.items) ? t.items.map((i: any) => ({
-                  id: i.id,
-                  name: i.name,
-                  price: Number(i.price),
-                  costPrice: Number(i.costPrice),
-                  quantity: Number(i.quantity)
+                  id: i.id || i.product_id,
+                  name: i.name || i.item_name,
+                  price: Number(i.price || i.item_price || 0),
+                  costPrice: Number(i.costPrice || i.item_cost_price || 0),
+                  quantity: Number(i.quantity || i.item_quantity || 0)
                 })) : []
               }));
               set({ transactions: normalized });
-              console.log('[STORE] History Updated:', normalized.length);
             }
           }
         } catch (err) {}
@@ -184,7 +180,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-vFinal', // Reset storage total
+      name: 'angkringan-pos-vFinal-Reset',
       partialize: (state) => ({ currentUser: state.currentUser, theme: state.theme })
     }
   )

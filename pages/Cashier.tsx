@@ -6,7 +6,6 @@ import { Category, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
 
 const Cashier: React.FC = () => {
-  // Removed qrisConfig from useStore destructuring as it does not exist in AppState
   const { products, cart, addToCart, updateQuantity, removeFromCart, clearCart, addTransaction, currentUser, addToast, fetchProducts, connectionStatus } = useStore();
   const [selectedCategory, setSelectedCategory] = useState<Category | 'Semua'>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,9 +83,7 @@ const Cashier: React.FC = () => {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[#F4F7F9] relative">
-      {/* Main Product Section */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* STICKY HEADER: Kategori & Search */}
         <div className="p-4 lg:p-6 space-y-4 border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-20 shrink-0">
           <div className="flex items-center gap-3">
             <div className="relative group flex-1">
@@ -125,7 +122,6 @@ const Cashier: React.FC = () => {
           </div>
         </div>
 
-        {/* SCROLLABLE PRODUCT GRID */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 no-scrollbar bg-[#F4F7F9]">
           {filteredProducts.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center py-20 text-slate-400">
@@ -170,7 +166,6 @@ const Cashier: React.FC = () => {
         </div>
       </div>
 
-      {/* Desktop Cart Sidebar */}
       <aside className="hidden lg:flex flex-col w-[380px] xl:w-[420px] border-l border-slate-200 bg-white shadow-xl h-full overflow-hidden shrink-0">
         <div className="p-8 border-b border-slate-200 flex justify-between items-center shrink-0">
           <div className="flex items-center space-x-3">
@@ -232,7 +227,6 @@ const Cashier: React.FC = () => {
         </div>
       </aside>
 
-      {/* Mobile Sticky Checkout Bar */}
       {cart.length > 0 && !showCheckoutModal && (
         <div className="lg:hidden fixed bottom-10 left-6 right-6 z-40 animate-in slide-in-from-bottom duration-500">
           <div className="bg-[#132B41] rounded-[32px] p-5 shadow-2xl flex items-center justify-between border border-white/10 ring-8 ring-white/10">
@@ -262,7 +256,6 @@ const Cashier: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile Cart Drawer */}
       {showMobileCart && (
         <div className="fixed inset-0 z-[55] lg:hidden">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowMobileCart(false)}></div>
@@ -298,7 +291,7 @@ const Cashier: React.FC = () => {
                  <span className="text-3xl font-black text-[#4089C9]">{formatCurrency(total)}</span>
               </div>
               <button 
-                onClick={ { setShowMobileCart(false); setShowCheckoutModal(true); } }
+                onClick={() => { setShowMobileCart(false); setShowCheckoutModal(true); }}
                 className="w-full py-5 bg-[#4089C9] text-white rounded-[24px] font-black text-lg shadow-xl active:scale-95 transition-all"
               >
                 LANJUT PEMBAYARAN
@@ -308,7 +301,6 @@ const Cashier: React.FC = () => {
         </div>
       )}
 
-      {/* Checkout Modal */}
       {showCheckoutModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 lg:p-6">
           <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md animate-in fade-in" onClick={() => !isProcessing && setShowCheckoutModal(false)}></div>

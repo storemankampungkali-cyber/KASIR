@@ -47,7 +47,8 @@ const Reports: React.FC = () => {
     filteredTransactions.forEach(t => {
       sales += Number(t.total || 0);
       (t.items || []).forEach(item => {
-        const itemCost = Number(item.costPrice || item.cost_price || 0);
+        // Fix: Use costPrice instead of cost_price as per CartItem interface
+        const itemCost = Number(item.costPrice || 0);
         cost += itemCost * Number(item.quantity || 0);
       });
     });
