@@ -1,5 +1,4 @@
 
-// Import React to fix the 'Cannot find namespace React' error on line 13
 import React, { useState, useMemo } from 'react';
 import { TrendingUp, Wallet, Package, Download, ArrowUpRight, Loader2, Calendar } from 'lucide-react';
 import { useStore } from '../store';
@@ -15,7 +14,6 @@ const Reports: React.FC = () => {
   const { transactions } = useStore();
   const [isExporting, setIsExporting] = useState(false);
   
-  // Helper: Fungsi ambil tanggal format YYYY-MM-DD dengan aman
   const getSafeDateString = (dateInput: any) => {
     try {
       if (!dateInput) return '1970-01-01';
@@ -34,7 +32,6 @@ const Reports: React.FC = () => {
   const [startDate, setStartDate] = useState(getSafeDateString(thirtyDaysAgo));
   const [endDate, setEndDate] = useState(getSafeDateString(now));
 
-  // Filter transactions based on date range
   const filteredTransactions = useMemo(() => {
     return (transactions || []).filter(t => {
       const txDate = getSafeDateString(t.createdAt);
@@ -42,31 +39,48 @@ const Reports: React.FC = () => {
     });
   }, [transactions, startDate, endDate]);
 
-  const totalSales = filteredTransactions.reduce((acc, t) => acc + Number(t.total || 0), 0);
-  const totalCost = filteredTransactions.reduce((acc, t) => {
-    const transactionCost = (t.items || []).reduce((itemAcc, item) => itemAcc + (Number(item.costPrice || 0) * Number(item.quantity || 0)), 0);
-    return acc + transactionCost;
-  }, 0);
-  const netProfit = totalSales - totalCost;
-  const totalOrders = filteredTransactions.length;
-
-  const paymentData = [
-    { name: 'Tunai', value: filteredTransactions.filter(t => t.paymentMethod === 'Tunai').reduce((a, b) => a + Number(b.total || 0), 0) },
-    { name: 'QRIS', value: filteredTransactions.filter(t => t.paymentMethod === 'QRIS').reduce((a, b) => a + Number(b.total || 0), 0) },
-    { name: 'Hutang', value: filteredTransactions.filter(t => t.paymentMethod === 'Hutang').reduce((a, b) => a + Number(b.total || 0), 0) },
-  ].filter(d => d.value > 0);
-
-  const itemCounts: Record<string, number> = {};
-  filteredTransactions.forEach(t => {
-    (t.items || []).forEach(item => {
-      itemCounts[item.name] = (itemCounts[item.name] || 0) + Number(item.quantity || 0);
+  // Kalkulasi Finansial yang Presisi
+  const { totalSales, totalCost, netProfit, totalOrders } = useMemo(() => {
+    let sales = 0;
+    let cost = 0;
+    
+    filteredTransactions.forEach(t => {
+      sales += Number(t.total || 0);
+      (t.items || []).forEach(item => {
+        const itemCost = Number(item.costPrice || item.cost_price || 0);
+        cost += itemCost * Number(item.quantity || 0);
+      });
     });
-  });
 
-  const topItemsData = Object.entries(itemCounts)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+    return {
+      totalSales: sales,
+      totalCost: cost,
+      netProfit: sales - cost,
+      totalOrders: filteredTransactions.length
+    };
+  }, [filteredTransactions]);
+
+  const paymentData = useMemo(() => {
+    const data = [
+      { name: 'Tunai', value: filteredTransactions.filter(t => t.paymentMethod === 'Tunai').reduce((a, b) => a + Number(b.total || 0), 0) },
+      { name: 'QRIS', value: filteredTransactions.filter(t => t.paymentMethod === 'QRIS').reduce((a, b) => a + Number(b.total || 0), 0) },
+      { name: 'Hutang', value: filteredTransactions.filter(t => t.paymentMethod === 'Hutang').reduce((a, b) => a + Number(b.total || 0), 0) },
+    ].filter(d => d.value > 0);
+    return data;
+  }, [filteredTransactions]);
+
+  const topItemsData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredTransactions.forEach(t => {
+      (t.items || []).forEach(item => {
+        counts[item.name] = (counts[item.name] || 0) + Number(item.quantity || 0);
+      });
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [filteredTransactions]);
 
   const COLORS = ['#4089C9', '#10b981', '#f59e0b', '#ef4444'];
 
@@ -74,124 +88,33 @@ const Reports: React.FC = () => {
     setIsExporting(true);
     try {
       const doc = new jsPDF();
-      const primaryColor = [64, 137, 201]; // #4089C9
-      const dateStr = new Date().toLocaleDateString('id-ID', { 
-        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-      });
+      const primaryColor = [64, 137, 201];
+      const dateStr = new Date().toLocaleString('id-ID');
       
-      const formatPeriod = (d: string) => {
-        const parsed = new Date(d);
-        return isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-      };
-
-      // --- HEADER ---
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(0, 0, 210, 45, 'F');
-      
+      doc.rect(0, 0, 210, 40, 'F');
       doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(24);
-      doc.text('ANGKRINGAN PRO', 20, 22);
-      
+      doc.setFontSize(22);
+      doc.text('LAPORAN PENJUALAN PRO', 20, 25);
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('LAPORAN PERFORMA BISNIS TERKONSOLIDASI', 20, 29);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Periode: ${formatPeriod(startDate)} - ${formatPeriod(endDate)}`, 20, 37);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Dicetak: ${dateStr}`, 190, 37, { align: 'right' });
+      doc.text(`Periode: ${startDate} s/d ${endDate}`, 20, 32);
 
-      // --- SUMMARY CARDS ---
-      let currentY = 60;
-      doc.setTextColor(51, 65, 85);
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Ringkasan Finansial', 20, currentY);
-      
-      currentY += 10;
-      const boxWidth = 42;
-      const boxHeight = 25;
-      const metrics = [
-        { label: 'OMSET KOTOR', val: formatCurrency(totalSales) },
-        { label: 'TOTAL MODAL', val: formatCurrency(totalCost) },
-        { label: 'LABA BERSIH', val: formatCurrency(netProfit) },
-        { label: 'TOTAL ORDER', val: totalOrders.toString() }
-      ];
-
-      metrics.forEach((m, i) => {
-        const xPos = 20 + (i * (boxWidth + 5));
-        doc.setDrawColor(226, 232, 240);
-        doc.setFillColor(248, 250, 252);
-        doc.roundedRect(xPos, currentY, boxWidth, boxHeight, 3, 3, 'FD');
-        
-        doc.setFontSize(7);
-        doc.setTextColor(148, 163, 184);
-        doc.text(m.label, xPos + boxWidth / 2, currentY + 8, { align: 'center' });
-        
-        doc.setFontSize(9);
-        doc.setTextColor(64, 137, 201);
-        doc.setFont('helvetica', 'bold');
-        doc.text(m.val, xPos + boxWidth / 2, currentY + 18, { align: 'center' });
-      });
-
-      // --- TOP PRODUCTS TABLE ---
-      currentY += 45;
-      doc.setTextColor(51, 65, 85);
-      doc.setFontSize(12);
-      doc.text('Daftar Produk Terlaris (Top 10)', 20, currentY);
-      
       (doc as any).autoTable({
-        startY: currentY + 5,
-        head: [['Peringkat', 'Nama Menu', 'Kuantitas Terjual']],
-        body: topItemsData.map((item, index) => [index + 1, item.name, `${item.count} Unit`]),
+        startY: 50,
+        head: [['Metrik Finansial', 'Nilai']],
+        body: [
+          ['Total Omset', formatCurrency(totalSales)],
+          ['Total Modal (HPP)', formatCurrency(totalCost)],
+          ['Laba Bersih', formatCurrency(netProfit)],
+          ['Jumlah Transaksi', `${totalOrders} Pesanan`]
+        ],
         theme: 'striped',
-        headStyles: { fillColor: primaryColor, textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 5 },
-        columnStyles: {
-          0: { cellWidth: 30, halign: 'center' },
-          2: { cellWidth: 50, halign: 'right' }
-        },
-        margin: { left: 20, right: 20 }
+        headStyles: { fillColor: primaryColor }
       });
 
-      currentY = (doc as any).lastAutoTable.finalY + 15;
-
-      // --- PAYMENT SUMMARY TABLE ---
-      doc.text('Analisis Metode Pembayaran', 20, currentY);
-      
-      (doc as any).autoTable({
-        startY: currentY + 5,
-        head: [['Metode Pembayaran', 'Persentase', 'Total Nominal']],
-        body: paymentData.map(d => {
-          const percentage = totalSales > 0 ? ((d.value / totalSales) * 100).toFixed(1) : '0';
-          return [d.name, `${percentage}%`, formatCurrency(d.value)];
-        }),
-        theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 5 },
-        columnStyles: {
-          1: { halign: 'center' },
-          2: { halign: 'right' }
-        },
-        margin: { left: 20, right: 20 }
-      });
-
-      // --- FOOTER ---
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(148, 163, 184);
-        doc.text(`Halaman ${i} dari ${pageCount}`, 105, 285, { align: 'center' });
-        doc.text('Dokumen ini sah dihasilkan oleh Sistem Angkringan Pro POS.', 105, 290, { align: 'center' });
-      }
-
-      doc.save(`Laporan_Bisnis_${startDate}_sd_${endDate}.pdf`);
+      doc.save(`Laporan_${startDate}_${endDate}.pdf`);
     } catch (error) {
-      console.error('PDF Export Error:', error);
-      alert('Gagal mengekspor PDF.');
+      alert('Gagal ekspor PDF');
     } finally {
       setIsExporting(false);
     }
@@ -199,38 +122,30 @@ const Reports: React.FC = () => {
 
   return (
     <div className="flex-1 p-6 lg:p-10 bg-[#F4F7F9] overflow-y-auto no-scrollbar">
-      <div className="max-w-6xl mx-auto space-y-12">
-        {/* Header Section */}
+      <div className="max-w-6xl mx-auto space-y-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-none">Analitik Bisnis</h1>
-            <p className="text-slate-500 font-medium mt-1.5 text-sm lg:text-base">Pantau performa keuangan dan inventaris secara real-time.</p>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Analitik Performa</h1>
+            <p className="text-slate-500 font-medium">Data dihitung otomatis berdasarkan modal per item saat transaksi.</p>
             
-            {/* Date Filters UI */}
-            <div className="flex flex-wrap items-center gap-4 mt-8">
+            <div className="flex flex-wrap items-center gap-4 mt-6">
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 font-bold mb-1.5 uppercase tracking-widest ml-1">Dari</span>
-                <div className="bg-white border border-slate-200 rounded-2xl px-4 flex items-center space-x-3 text-sm text-slate-600 shadow-sm focus-within:ring-4 focus-within:ring-[#4089C9]/5 transition-all h-[52px]">
-                  <Calendar size={18} className="text-[#4089C9]" />
-                  <input 
-                    type="date" 
-                    value={startDate} 
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="bg-transparent outline-none border-none p-0 cursor-pointer font-bold text-slate-800" 
-                  />
-                </div>
+                <span className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Dari</span>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-xl px-4 py-2 font-bold text-slate-800 shadow-sm"
+                />
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 font-bold mb-1.5 uppercase tracking-widest ml-1">Hingga</span>
-                <div className="bg-white border border-slate-200 rounded-2xl px-4 flex items-center space-x-3 text-sm text-slate-600 shadow-sm focus-within:ring-4 focus-within:ring-[#4089C9]/5 transition-all h-[52px]">
-                  <Calendar size={18} className="text-[#4089C9]" />
-                  <input 
-                    type="date" 
-                    value={endDate} 
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="bg-transparent outline-none border-none p-0 cursor-pointer font-bold text-slate-800" 
-                  />
-                </div>
+                <span className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-widest">Hingga</span>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-xl px-4 py-2 font-bold text-slate-800 shadow-sm"
+                />
               </div>
             </div>
           </div>
@@ -238,80 +153,72 @@ const Reports: React.FC = () => {
           <button 
             onClick={exportToPDF}
             disabled={isExporting}
-            className="flex items-center justify-center space-x-2.5 bg-[#4089C9] hover:bg-[#3476ad] disabled:bg-slate-300 text-white font-bold px-8 rounded-2xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all h-[52px] text-sm lg:text-base self-end"
+            className="flex items-center space-x-2 bg-[#4089C9] text-white font-bold px-8 py-4 rounded-2xl shadow-lg active:scale-95 transition-all"
           >
-            {isExporting ? (
-              <Loader2 size={20} className="animate-spin" />
-            ) : (
-              <Download size={20} strokeWidth={2.5} />
-            )}
-            <span>{isExporting ? 'MENGEKSPOR...' : 'EXPORT PDF'}</span>
+            {isExporting ? <Loader2 className="animate-spin" /> : <Download size={20} />}
+            <span>EXPORT LAPORAN</span>
           </button>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-          {[
-            { label: 'Omset Kotor', value: formatCurrency(totalSales), icon: TrendingUp, color: 'text-[#4089C9]', bg: 'bg-blue-50' },
-            { label: 'Total Modal', value: formatCurrency(totalCost), icon: Wallet, color: 'text-orange-500', bg: 'bg-orange-50' },
-            { label: 'Laba Bersih', value: formatCurrency(netProfit), icon: ArrowUpRight, color: 'text-emerald-500', bg: 'bg-emerald-50', highlight: true },
-            { label: 'Pesanan Selesai', value: totalOrders.toString(), icon: Package, color: 'text-purple-500', bg: 'bg-purple-50' },
-          ].map((stat, i) => (
-            <div key={i} className={`bg-white border p-6 lg:p-8 rounded-[32px] shadow-sm transition-all hover:shadow-lg ${stat.highlight ? 'border-emerald-200 ring-4 ring-emerald-50' : 'border-slate-100'}`}>
-              <div className={`${stat.bg} ${stat.color} w-12 h-12 lg:w-14 lg:h-14 rounded-2xl flex items-center justify-center mb-5 lg:mb-6 shadow-sm`}>
-                <stat.icon size={24} />
-              </div>
-              <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em] mb-1.5 lg:mb-2">{stat.label}</p>
-              <p className={`text-2xl lg:text-3xl font-black tracking-tighter ${stat.highlight ? 'text-emerald-600' : 'text-slate-900'}`}>{stat.value}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white border p-8 rounded-[32px] shadow-sm">
+            <div className="bg-blue-50 text-[#4089C9] w-12 h-12 rounded-2xl flex items-center justify-center mb-4"><TrendingUp size={24} /></div>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-1">Total Omset</p>
+            <p className="text-2xl font-black text-slate-900">{formatCurrency(totalSales)}</p>
+          </div>
+          <div className="bg-white border p-8 rounded-[32px] shadow-sm">
+            <div className="bg-orange-50 text-orange-500 w-12 h-12 rounded-2xl flex items-center justify-center mb-4"><Wallet size={24} /></div>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-1">Total Modal</p>
+            <p className="text-2xl font-black text-slate-900">{formatCurrency(totalCost)}</p>
+          </div>
+          <div className="bg-white border-2 border-emerald-100 p-8 rounded-[32px] shadow-sm bg-emerald-50/30">
+            <div className="bg-emerald-100 text-emerald-600 w-12 h-12 rounded-2xl flex items-center justify-center mb-4"><ArrowUpRight size={24} /></div>
+            <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest mb-1">Laba Bersih</p>
+            <p className="text-2xl font-black text-emerald-600">{formatCurrency(netProfit)}</p>
+          </div>
+          <div className="bg-white border p-8 rounded-[32px] shadow-sm">
+            <div className="bg-purple-50 text-purple-500 w-12 h-12 rounded-2xl flex items-center justify-center mb-4"><Package size={24} /></div>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-1">Total Pesanan</p>
+            <p className="text-2xl font-black text-slate-900">{totalOrders}</p>
+          </div>
         </div>
 
-        {/* Chart Visuals */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 pb-20">
-          <div className="bg-white border border-slate-100 rounded-[32px] lg:rounded-[40px] p-8 lg:p-10 shadow-sm">
-            <h3 className="text-lg lg:text-xl font-black mb-8 lg:mb-10 flex items-center space-x-3 text-slate-800">
-              <span className="w-1.5 h-6 lg:h-8 bg-[#4089C9] rounded-full"></span>
-              <span>Produk Terlaris</span>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
+          <div className="bg-white border border-slate-100 rounded-[40px] p-10 shadow-sm">
+            <h3 className="text-xl font-black mb-10 flex items-center space-x-3 text-slate-800">
+              <span className="w-1.5 h-8 bg-[#4089C9] rounded-full"></span>
+              <span>Top 5 Menu Terlaris</span>
             </h3>
-            {topItemsData.length > 0 ? (
-              <div className="h-[280px] lg:h-[320px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topItemsData.slice(0, 5)} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} width={90} tick={{fontWeight: 700}} />
-                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)' }} />
-                    <Bar dataKey="count" fill="#4089C9" radius={[0, 10, 10, 0]} barSize={30} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-[280px] lg:h-[320px] flex items-center justify-center text-slate-300 font-bold italic">Tidak ada data untuk rentang ini</div>
-            )}
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topItemsData.slice(0, 5)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} width={100} tick={{fontWeight: 700}} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#4089C9" radius={[0, 10, 10, 0]} barSize={35} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          <div className="bg-white border border-slate-100 rounded-[32px] lg:rounded-[40px] p-8 lg:p-10 shadow-sm">
-            <h3 className="text-lg lg:text-xl font-black mb-8 lg:mb-10 flex items-center space-x-3 text-slate-800">
-              <span className="w-1.5 h-6 lg:h-8 bg-emerald-500 rounded-full"></span>
-              <span>Distribusi Pembayaran</span>
+          <div className="bg-white border border-slate-100 rounded-[40px] p-10 shadow-sm">
+            <h3 className="text-xl font-black mb-10 flex items-center space-x-3 text-slate-800">
+              <span className="w-1.5 h-8 bg-emerald-500 rounded-full"></span>
+              <span>Sumber Pembayaran</span>
             </h3>
-            {paymentData.length > 0 ? (
-              <div className="h-[280px] lg:h-[320px] w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={paymentData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={8} dataKey="value" cornerRadius={12}>
-                      {paymentData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="white" strokeWidth={5} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(val: number) => formatCurrency(val)} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-[280px] lg:h-[320px] flex items-center justify-center text-slate-300 font-bold italic">Tidak ada data pembayaran</div>
-            )}
+            <div className="h-[300px] w-full flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={paymentData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={8} dataKey="value" cornerRadius={12}>
+                    {paymentData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="white" strokeWidth={5} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(val: number) => formatCurrency(val)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       </div>

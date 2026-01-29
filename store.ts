@@ -180,14 +180,17 @@ export const useStore = create<AppState>()(
               // Pastikan items selalu berupa array agar UI tidak crash
               const normalizedTx = data.map((t: any) => ({
                 ...t,
-                items: Array.isArray(t.items) ? t.items : [],
+                items: Array.isArray(t.items) ? t.items.map((item: any) => ({
+                  ...item,
+                  price: Number(item.price || 0),
+                  costPrice: Number(item.costPrice ?? item.cost_price ?? 0)
+                })) : [],
                 total: Number(t.total || 0),
-                subtotal: Number(t.subtotal || 0)
+                subtotal: Number(t.subtotal || 0),
+                discount: Number(t.discount || 0)
               }));
               set({ transactions: normalizedTx });
             }
-          } else {
-            console.error('[DEBUG] Fetch transactions failed with status:', res.status);
           }
         } catch (err) {
           console.error('[DEBUG] Fetch transactions error:', err);
@@ -197,21 +200,26 @@ export const useStore = create<AppState>()(
       addTransaction: async (t) => {
         set({ connectionStatus: 'SYNCING' });
         try {
+          // Double check: Pastikan semua item punya costPrice sebelum kirim
+          const payload = {
+            ...t,
+            items: t.items.map(item => ({
+              ...item,
+              costPrice: item.costPrice || 0
+            }))
+          };
+
           const res = await fetch(`${API_URL}/transactions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(t)
+            body: JSON.stringify(payload)
           });
           if (res.ok) {
-            console.log('[DEBUG] Transaction saved successfully to server');
             await get().fetchTransactions();
           } else {
-            const errorText = await res.text();
-            console.error('[DEBUG] Server rejected transaction:', errorText);
-            get().addToast('ERROR', 'Gagal Sinkron', 'Transaksi tersimpan lokal tapi gagal dikirim ke server.');
+            get().addToast('ERROR', 'Gagal', 'Transaksi gagal disimpan di server.');
           }
         } catch (err) {
-          console.error('[DEBUG] Network error saving transaction:', err);
           set({ connectionStatus: 'DISCONNECTED' });
         }
       },
@@ -225,7 +233,7 @@ export const useStore = create<AppState>()(
           });
           if (res.ok) {
             await get().fetchTransactions();
-            get().addToast('INFO', 'Dibatalkan', `Transaksi #${id} berhasil di-void.`);
+            get().addToast('INFO', 'Dibatalkan', `Transaksi #${id} telah di-void.`);
           }
         } catch (err) {}
       },
@@ -252,7 +260,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-v8', // Nama storage diubah agar refresh cache data
+      name: 'angkringan-pos-v9', // Versi storage baru agar refresh state
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
