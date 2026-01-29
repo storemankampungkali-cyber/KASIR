@@ -6,21 +6,26 @@ import { generateId } from './utils';
 
 /**
  * STRATEGI URL:
- * Memastikan URL bersih dari trailing slash (/) agar penggabungan string tidak error (//api).
+ * Mencoba mengambil dari VITE_API_URL, jika tidak ada pakai localhost (local dev).
  */
 const getBaseUrl = () => {
   const envUrl = (import.meta as any).env?.VITE_API_URL;
-  if (!envUrl) return 'http://localhost:3030/api';
   
-  // Hapus tanda / di akhir jika ada
+  // Jika sedang di produksi tapi env kosong, kita bisa fallback ke IP VPS Abang 
+  // atau biarkan default localhost jika sedang dev.
+  if (!envUrl) {
+    if (window.location.hostname !== 'localhost') {
+       // Masukkan IP VPS Abang di sini sebagai fallback jika env di Vercel lupa diset
+       return 'http://159.223.57.240/api'; 
+    }
+    return 'http://localhost:3030/api';
+  }
+  
   return envUrl.replace(/\/$/, '');
 };
 
 const API_URL = getBaseUrl();
-// Health URL: Ganti /api dengan /health, atau tambahkan /health jika tidak ada /api
-const HEALTH_URL = API_URL.endsWith('/api') 
-  ? API_URL.replace('/api', '/health') 
-  : `${API_URL}/health`;
+const HEALTH_URL = API_URL.replace('/api', '/health');
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
 export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
@@ -82,9 +87,8 @@ export const useStore = create<AppState>()(
         const start = Date.now();
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000); 
+          const timeoutId = setTimeout(() => controller.abort(), 5000); 
           
-          console.log(`Checking connection to: ${HEALTH_URL}`);
           const res = await fetch(HEALTH_URL, { 
             signal: controller.signal,
             cache: 'no-store' 
@@ -94,20 +98,15 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             const end = Date.now();
             const data = await res.json().catch(() => ({}));
-            
-            // Logika baru: Jika Backend OK tapi Database Mati, tetap anggap Disconnected
             if (data.database === 'DISCONNECTED' || data.status === 'DOWN') {
-               console.warn('Backend UP but Database DOWN');
                set({ latency: null, connectionStatus: 'DISCONNECTED' });
             } else {
                set({ latency: end - start, connectionStatus: 'CONNECTED' });
             }
           } else {
-            console.error('Health Check Failed:', res.status, res.statusText);
             set({ latency: null, connectionStatus: 'DISCONNECTED' });
           }
         } catch (err) {
-          console.error('Network unreachable:', err);
           set({ latency: null, connectionStatus: 'DISCONNECTED' });
         }
       },
@@ -118,18 +117,12 @@ export const useStore = create<AppState>()(
       products: [],
       fetchProducts: async () => {
         try {
-          console.log(`Fetching products from: ${API_URL}/products`);
           const res = await fetch(`${API_URL}/products`);
-          if (!res.ok) {
-             const errorText = await res.text();
-             throw new Error(`Server Error (${res.status}): ${errorText}`);
-          }
+          if (!res.ok) throw new Error(`Server Error`);
           const data = await res.json();
           set({ products: data, connectionStatus: 'CONNECTED' });
         } catch (err) {
-          console.error('Fetch Products Error:', err);
           set({ connectionStatus: 'DISCONNECTED' });
-          get().addToast('ERROR', 'Gagal Terhubung', 'Gagal memuat produk. Backend mungkin sedang restart.');
         }
       },
       
@@ -195,7 +188,6 @@ export const useStore = create<AppState>()(
           const data = await res.json();
           set({ transactions: data, connectionStatus: 'CONNECTED' });
         } catch (err) {
-          console.error('Fetch Transactions Error:', err);
           set({ connectionStatus: 'DISCONNECTED' });
         }
       },
@@ -264,7 +256,7 @@ export const useStore = create<AppState>()(
       })),
     }),
     { 
-      name: 'angkringan-pos-railway',
+      name: 'angkringan-pos-vps',
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
