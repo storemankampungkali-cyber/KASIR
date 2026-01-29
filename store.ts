@@ -4,24 +4,14 @@ import { persist } from 'zustand/middleware';
 import { Product, CartItem, Transaction, Category, PaymentMethod, User } from './types';
 import { generateId } from './utils';
 
-/**
- * STRATEGI PROXY VERCEL:
- * Kita menggunakan path relatif '/api'. 
- * Vercel akan membaca file vercel.json dan mem-proxy request ini ke http://159.223.57.240:3030/api
- * Ini akan menghilangkan error 'Mixed Content' karena browser menganggap request tetap ke HTTPS.
- */
 const getBaseUrl = () => {
-  // Jika di local development (Vite), kita pakai localhost
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return 'http://localhost:3030/api';
   }
-  
-  // Di production (Vercel), gunakan path relatif agar melewati Vercel Rewrite/Proxy
   return '/api';
 };
 
 const API_URL = getBaseUrl();
-// Karena health di vercel.json diarahkan ke /health, kita sesuaikan
 const HEALTH_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
   ? 'http://localhost:3030/health' 
   : '/health';
@@ -85,22 +75,14 @@ export const useStore = create<AppState>()(
       checkLatency: async () => {
         const start = Date.now();
         try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); 
-          
-          const res = await fetch(HEALTH_URL, { 
-            signal: controller.signal,
-            cache: 'no-store' 
-          });
-          clearTimeout(timeoutId);
-
+          const res = await fetch(HEALTH_URL, { cache: 'no-store' });
           if (res.ok) {
             const end = Date.now();
-            const data = await res.json().catch(() => ({}));
-            if (data.database === 'DISCONNECTED' || data.status === 'DOWN') {
-               set({ latency: null, connectionStatus: 'DISCONNECTED' });
+            const data = await res.json();
+            if (data.database === 'CONNECTED') {
+              set({ latency: end - start, connectionStatus: 'CONNECTED' });
             } else {
-               set({ latency: end - start, connectionStatus: 'CONNECTED' });
+              set({ latency: null, connectionStatus: 'DISCONNECTED' });
             }
           } else {
             set({ latency: null, connectionStatus: 'DISCONNECTED' });
@@ -115,12 +97,15 @@ export const useStore = create<AppState>()(
       
       products: [],
       fetchProducts: async () => {
+        console.log(`[API] Fetching products from ${API_URL}/products...`);
         try {
           const res = await fetch(`${API_URL}/products`);
-          if (!res.ok) throw new Error(`Server Error`);
+          if (!res.ok) throw new Error(`Server returned ${res.status}`);
           const data = await res.json();
+          console.log(`[API] Received ${data.length} products:`, data);
           set({ products: data, connectionStatus: 'CONNECTED' });
-        } catch (err) {
+        } catch (err: any) {
+          console.error(`[API ERROR] Gagal ambil produk:`, err.message);
           set({ connectionStatus: 'DISCONNECTED' });
         }
       },
@@ -128,6 +113,7 @@ export const useStore = create<AppState>()(
       addProduct: async (p) => {
         set({ connectionStatus: 'SYNCING' });
         const newProduct = { ...p, id: generateId() };
+        console.log(`[API] Adding product:`, newProduct);
         try {
           const res = await fetch(`${API_URL}/products`, {
             method: 'POST',
@@ -135,11 +121,13 @@ export const useStore = create<AppState>()(
             body: JSON.stringify(newProduct)
           });
           if (!res.ok) throw new Error('Create failed');
+          console.log(`[API] Product added successfully`);
           await get().fetchProducts();
-          set({ connectionStatus: 'CONNECTED' });
-        } catch (err) {
+          get().addToast('SUCCESS', 'Tersimpan', `${newProduct.name} berhasil ditambahkan.`);
+        } catch (err: any) {
+          console.error(`[API ERROR] Gagal tambah produk:`, err.message);
           set({ connectionStatus: 'DISCONNECTED' });
-          get().addToast('ERROR', 'Sinkronisasi Gagal', 'Gagal menyimpan produk.');
+          get().addToast('ERROR', 'Koneksi Bermasalah', 'Gagal menyimpan ke server.');
         }
       },
       
@@ -202,14 +190,12 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             await get().fetchTransactions();
             set({ connectionStatus: 'CONNECTED' });
-            get().addToast('SUCCESS', 'Tersinkron', 'Transaksi berhasil disimpan.');
           } else {
              throw new Error('Save failed');
           }
         } catch (err) {
           set({ connectionStatus: 'DISCONNECTED' });
           set((state) => ({ transactions: [t, ...state.transactions] }));
-          get().addToast('INFO', 'Mode Offline', 'Transaksi disimpan lokal.');
         }
       },
       
@@ -255,7 +241,7 @@ export const useStore = create<AppState>()(
       })),
     }),
     { 
-      name: 'angkringan-pos-proxy-v1',
+      name: 'angkringan-pos-proxy-v2',
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,

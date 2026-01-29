@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Banknote, X, ChevronUp } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Banknote, X, ChevronUp, RefreshCw, PackageX } from 'lucide-react';
 import { useStore } from '../store';
 import { Category, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
 
 const Cashier: React.FC = () => {
-  const { products, cart, addToCart, updateQuantity, removeFromCart, clearCart, addTransaction, currentUser, qrisConfig, addToast } = useStore();
+  const { products, cart, addToCart, updateQuantity, removeFromCart, clearCart, addTransaction, currentUser, qrisConfig, addToast, fetchProducts, connectionStatus } = useStore();
   const [selectedCategory, setSelectedCategory] = useState<Category | 'Semua'>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
@@ -15,6 +15,7 @@ const Cashier: React.FC = () => {
   const [customerName, setCustomerName] = useState('');
   const [cashReceived, setCashReceived] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const categories: (Category | 'Semua')[] = ['Semua', ...Object.values(Category)];
 
@@ -25,6 +26,13 @@ const Cashier: React.FC = () => {
       return matchCategory && matchSearch && p.isActive;
     });
   }, [products, selectedCategory, searchQuery]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchProducts();
+    setTimeout(() => setIsRefreshing(false), 500);
+    addToast('INFO', 'Data Diperbarui', 'Katalog menu telah disinkronkan dengan server.');
+  };
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal;
@@ -45,10 +53,6 @@ const Cashier: React.FC = () => {
     }
     if (paymentMethod === PaymentMethod.TUNAI && cashReceived < total) {
       addToast('ERROR', 'Uang Kurang', 'Nominal yang diterima harus lebih besar atau sama dengan total tagihan.');
-      return;
-    }
-    if (paymentMethod === PaymentMethod.QRIS && !qrisConfig.isActive) {
-      addToast('INFO', 'Konfigurasi QRIS', 'Fitur QRIS belum diaktifkan di pengaturan.');
       return;
     }
 
@@ -83,15 +87,25 @@ const Cashier: React.FC = () => {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* STICKY HEADER: Kategori & Search */}
         <div className="p-4 lg:p-6 space-y-4 border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-20 shrink-0">
-          <div className="relative group">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#4089C9]" size={20} />
-            <input
-              type="text"
-              placeholder="Cari menu nikmat..."
-              className="w-full bg-slate-100 border-2 border-transparent focus:border-[#4089C9]/50 rounded-[24px] py-3.5 pl-14 pr-6 text-slate-900 placeholder-slate-400 focus:outline-none text-base lg:text-lg transition-all"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="flex items-center gap-3">
+            <div className="relative group flex-1">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#4089C9]" size={20} />
+              <input
+                type="text"
+                placeholder="Cari menu nikmat..."
+                className="w-full bg-slate-100 border-2 border-transparent focus:border-[#4089C9]/50 rounded-[24px] py-3.5 pl-14 pr-6 text-slate-900 placeholder-slate-400 focus:outline-none text-base lg:text-lg transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <button 
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-4 bg-white border border-slate-200 rounded-2xl text-[#4089C9] hover:bg-slate-50 active:scale-90 transition-all shadow-sm"
+              title="Refresh Data"
+            >
+              <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
           </div>
           <div className="flex space-x-3 overflow-x-auto no-scrollbar pb-1">
             {categories.map((cat) => (
@@ -112,31 +126,46 @@ const Cashier: React.FC = () => {
 
         {/* SCROLLABLE PRODUCT GRID */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 no-scrollbar bg-[#F4F7F9]">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5 pb-44 lg:pb-10">
-            {filteredProducts.map((product) => {
-              const inCart = cart.find(c => c.id === product.id);
-              return (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  className={`flex flex-col text-left bg-white border-2 rounded-[28px] lg:rounded-[32px] p-4 lg:p-5 transition-all active:scale-95 group relative overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${
-                    inCart ? 'border-[#4089C9]' : 'border-transparent'
-                  }`}
-                >
-                  <span className="text-slate-400 text-[9px] lg:text-[10px] font-bold uppercase tracking-widest mb-1.5 lg:mb-2">{product.category}</span>
-                  <span className="text-slate-900 font-extrabold text-base lg:text-lg leading-snug mb-2 lg:mb-3 h-12 lg:h-14 line-clamp-2">{product.name}</span>
-                  <div className="mt-auto flex items-center justify-between">
-                    <span className="text-[#4089C9] font-black text-lg lg:text-xl">{formatCurrency(product.price)}</span>
-                    {inCart && (
-                      <div className="bg-[#4089C9] text-white p-1.5 lg:p-2 rounded-xl shadow-lg animate-in zoom-in">
-                        <span className="text-[10px] lg:text-xs font-black">{inCart.quantity}x</span>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          {filteredProducts.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center py-20 text-slate-400">
+              <PackageX size={80} strokeWidth={1.5} className="mb-4 opacity-20" />
+              <p className="font-bold text-lg">Menu belum tersedia</p>
+              <p className="text-sm opacity-60 mb-6">Pastikan sudah menambah menu di Katalog atau cek koneksi.</p>
+              <button 
+                onClick={handleRefresh}
+                className="flex items-center space-x-2 bg-[#4089C9] text-white px-6 py-3 rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+              >
+                <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                <span>Coba Tarik Data</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5 pb-44 lg:pb-10">
+              {filteredProducts.map((product) => {
+                const inCart = cart.find(c => c.id === product.id);
+                return (
+                  <button
+                    key={product.id}
+                    onClick={() => addToCart(product)}
+                    className={`flex flex-col text-left bg-white border-2 rounded-[28px] lg:rounded-[32px] p-4 lg:p-5 transition-all active:scale-95 group relative overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${
+                      inCart ? 'border-[#4089C9]' : 'border-transparent'
+                    }`}
+                  >
+                    <span className="text-slate-400 text-[9px] lg:text-[10px] font-bold uppercase tracking-widest mb-1.5 lg:mb-2">{product.category}</span>
+                    <span className="text-slate-900 font-extrabold text-base lg:text-lg leading-snug mb-2 lg:mb-3 h-12 lg:h-14 line-clamp-2">{product.name}</span>
+                    <div className="mt-auto flex items-center justify-between">
+                      <span className="text-[#4089C9] font-black text-lg lg:text-xl">{formatCurrency(product.price)}</span>
+                      {inCart && (
+                        <div className="bg-[#4089C9] text-white p-1.5 lg:p-2 rounded-xl shadow-lg animate-in zoom-in">
+                          <span className="text-[10px] lg:text-xs font-black">{inCart.quantity}x</span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -185,7 +214,6 @@ const Cashier: React.FC = () => {
           )}
         </div>
 
-        {/* REPOSITIONED: Floating Payment Card on Desktop */}
         <div className="px-6 pb-10 shrink-0">
           <div className="p-8 bg-slate-900 rounded-[40px] shadow-2xl shadow-slate-900/40 border border-white/10">
             <div className="space-y-1 mb-6">
@@ -203,7 +231,7 @@ const Cashier: React.FC = () => {
         </div>
       </aside>
 
-      {/* REPOSITIONED: Mobile Sticky Checkout Bar (Raised Higher) */}
+      {/* Mobile Sticky Checkout Bar */}
       {cart.length > 0 && !showCheckoutModal && (
         <div className="lg:hidden fixed bottom-10 left-6 right-6 z-40 animate-in slide-in-from-bottom duration-500">
           <div className="bg-[#132B41] rounded-[32px] p-5 shadow-2xl flex items-center justify-between border border-white/10 ring-8 ring-white/10">
