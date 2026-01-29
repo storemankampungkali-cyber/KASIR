@@ -6,7 +6,12 @@ import { pool, initDatabase } from './db';
 const app = express();
 const PORT = process.env.PORT || 3030;
 
-// Logging Middleware
+// Force Numeric Types: Mengatasi masalah MySQL mengembalikan decimal sebagai string
+const parseToNumber = (val: any) => {
+  const parsed = parseFloat(val);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 app.use((req: any, res: any, next: NextFunction) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -16,18 +21,10 @@ app.use((req: any, res: any, next: NextFunction) => {
   next();
 });
 
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}) as any);
-
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }) as any);
 app.use(express.json() as any);
 
-// Fix untuk BigInt JSON
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
+(BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
 // --- API ROUTES ---
 
@@ -40,71 +37,37 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// GET: Products
 app.get('/api/products', async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT id, name, CAST(price AS DOUBLE) as price, CAST(cost_price AS DOUBLE) as costPrice, 
-             category, is_active AS isActive, outlet_id AS outletId 
-      FROM products ORDER BY category, name
-    `);
-    res.json(rows);
-  } catch (err: any) {
-    res.status(500).json({ error: 'Gagal ambil produk' });
+    const [rows]: any = await pool.query('SELECT * FROM products ORDER BY category, name');
+    const products = rows.map((p: any) => ({
+      ...p,
+      price: parseToNumber(p.price),
+      costPrice: parseToNumber(p.cost_price),
+      isActive: p.is_active === 1 || p.is_active === true
+    }));
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ error: 'DB Error' });
   }
 });
 
-app.post('/api/products', async (req, res) => {
-  const b = req.body;
-  try {
-    await pool.query(
-      'INSERT INTO products (id, name, price, cost_price, category, is_active, outlet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [b.id, b.name, b.price, b.costPrice ?? 0, b.category, b.isActive ?? 1, b.outletId ?? 'o1']
-    );
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Gagal tambah produk' });
-  }
-});
-
-app.put('/api/products/:id', async (req, res) => {
-  const { id } = req.params;
-  const b = req.body;
-  try {
-    await pool.query(
-      'UPDATE products SET name=?, price=?, cost_price=?, category=?, is_active=? WHERE id=?',
-      [b.name, b.price, b.costPrice ?? 0, b.category, b.isActive ? 1 : 0, id]
-    );
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Gagal update produk' });
-  }
-});
-
-// GET Transactions: SOLID JOIN VERSION
+// GET: Transactions (THE CRITICAL FIX)
 app.get('/api/transactions', async (req, res) => {
   try {
+    console.log('[BACKEND] Fetching all transactions...');
+    
+    // Query dengan LEFT JOIN yang lebih bersih
     const [rows]: any = await pool.query(`
       SELECT 
-        t.id, 
-        CAST(t.subtotal AS DOUBLE) as subtotal, 
-        CAST(t.discount AS DOUBLE) as discount, 
-        CAST(t.total AS DOUBLE) as total, 
-        t.payment_method AS paymentMethod, 
-        t.customer_name AS customerName, 
-        t.status, 
-        t.created_at AS createdAt, 
-        t.outlet_id AS outletId, 
-        t.cashier_id AS cashierId,
-        ti.product_id AS item_id, 
-        ti.name AS item_name, 
-        CAST(ti.price AS DOUBLE) AS item_price, 
-        CAST(ti.cost_price AS DOUBLE) AS item_costPrice, 
-        ti.quantity AS item_quantity, 
-        ti.note AS item_note
+        t.*,
+        ti.product_id, ti.name as item_name, ti.price as item_price, 
+        ti.cost_price as item_cost_price, ti.quantity as item_quantity, ti.note as item_note
       FROM transactions t
       LEFT JOIN transaction_items ti ON t.id = ti.transaction_id
       ORDER BY t.created_at DESC
-      LIMIT 500
+      LIMIT 1000
     `);
 
     const txMap = new Map();
@@ -113,69 +76,78 @@ app.get('/api/transactions', async (req, res) => {
       if (!txMap.has(row.id)) {
         txMap.set(row.id, {
           id: row.id,
-          subtotal: row.subtotal,
-          discount: row.discount,
-          total: row.total,
-          paymentMethod: row.paymentMethod,
-          customerName: row.customerName,
+          subtotal: parseToNumber(row.subtotal),
+          discount: parseToNumber(row.discount),
+          total: parseToNumber(row.total),
+          paymentMethod: row.payment_method,
+          customerName: row.customer_name,
           status: row.status,
-          createdAt: row.createdAt,
-          outletId: row.outletId,
-          cashierId: row.cashierId,
+          createdAt: row.created_at,
+          outletId: row.outlet_id,
+          cashierId: row.cashier_id,
+          voidReason: row.void_reason,
           items: []
         });
       }
 
-      if (row.item_id) {
+      // Pastikan item_id ada (bukan null hasil LEFT JOIN pada transaksi tanpa item)
+      if (row.product_id) {
         txMap.get(row.id).items.push({
-          id: row.item_id,
+          id: row.product_id,
           name: row.item_name,
-          price: row.item_price,
-          costPrice: row.item_costPrice,
-          quantity: row.item_quantity,
+          price: parseToNumber(row.item_price),
+          costPrice: parseToNumber(row.item_cost_price),
+          quantity: parseInt(row.item_quantity) || 0,
           note: row.item_note
         });
       }
     });
 
-    res.json(Array.from(txMap.values()));
+    const result = Array.from(txMap.values());
+    console.log(`[BACKEND] Sent ${result.length} transactions to frontend.`);
+    res.json(result);
   } catch (err: any) {
-    console.error('Error GET transactions:', err);
-    res.status(500).json({ error: 'Gagal ambil riwayat', details: err.message });
+    console.error('[BACKEND ERROR]', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
+// POST: Save Transaction
 app.post('/api/transactions', async (req, res) => {
   const { id, items, subtotal, discount, total, paymentMethod, customerName, createdAt, outletId, cashierId } = req.body;
-  const connection = await pool.getConnection();
   
+  if (!items || items.length === 0) {
+    return res.status(400).json({ error: 'Keranjang belanja kosong' });
+  }
+
+  const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+    console.log(`[BACKEND] Saving transaction #${id} with ${items.length} items...`);
+
+    // 1. Insert Header
     await connection.query(
       `INSERT INTO transactions (id, subtotal, discount, total, payment_method, customer_name, status, created_at, outlet_id, cashier_id) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, subtotal, discount, total, paymentMethod, customerName, 'COMPLETED', new Date(createdAt), outletId, cashierId]
+      [id, subtotal, discount, total, paymentMethod, customerName || null, 'COMPLETED', new Date(createdAt), outletId, cashierId]
     );
-    
-    if (items && Array.isArray(items)) {
-      for (const item of items) {
-        // Gunakan COALESCE atau check eksplisit untuk cost_price agar laporan modal tidak nol
-        const cPrice = item.costPrice ?? item.cost_price ?? 0;
-        await connection.query(
-          `INSERT INTO transaction_items (transaction_id, product_id, name, price, cost_price, quantity, note) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, item.id, item.name, item.price, cPrice, item.quantity, item.note]
-        );
-      }
+
+    // 2. Insert Items (Looping)
+    for (const item of items) {
+      await connection.query(
+        `INSERT INTO transaction_items (transaction_id, product_id, name, price, cost_price, quantity, note) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, item.id, item.name, item.price, item.costPrice || 0, item.quantity, item.note || null]
+      );
     }
 
     await connection.commit();
+    console.log(`[BACKEND] Transaction #${id} saved successfully.`);
     res.json({ success: true });
   } catch (err: any) {
     await connection.rollback();
-    console.error('Error POST transaction:', err);
-    res.status(500).json({ error: 'Gagal simpan', details: err.message });
+    console.error('[BACKEND SAVE ERROR]', err);
+    res.status(500).json({ error: 'Gagal simpan transaksi', details: err.message });
   } finally {
     connection.release();
   }
@@ -193,6 +165,6 @@ app.put('/api/transactions/:id/void', async (req, res) => {
 });
 
 app.listen(Number(PORT), '0.0.0.0', async () => {
-  console.log(`🚀 SERVER RUNNING ON PORT ${PORT}`);
+  console.log(`🚀 SERVER POS PRO RUNNING ON PORT ${PORT}`);
   await initDatabase();
 });

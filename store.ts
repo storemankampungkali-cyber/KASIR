@@ -108,7 +108,7 @@ export const useStore = create<AppState>()(
             price: Number(p.price || 0),
             costPrice: Number(p.costPrice ?? p.cost_price ?? 0),
             category: p.category || 'Lainnya',
-            isActive: p.isActive === true || p.isActive === 1 || p.is_active === 1 || p.is_active === true,
+            isActive: p.isActive === true || p.isActive === 1,
             outletId: p.outletId ?? p.outlet_id ?? 'o1'
           }));
           set({ products: normalizedProducts, connectionStatus: 'CONNECTED' });
@@ -172,52 +172,47 @@ export const useStore = create<AppState>()(
       transactions: [],
       fetchTransactions: async () => {
         try {
+          console.log('[STORE] Refreshing transactions...');
           const res = await fetch(`${API_URL}/transactions`);
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-              console.log('[DEBUG] Store received transactions:', data);
-              // Pastikan items selalu berupa array agar UI tidak crash
+              console.log('[STORE] Transactions data received:', data.length);
+              
               const normalizedTx = data.map((t: any) => ({
                 ...t,
+                // KRITIS: Pastikan items selalu array dan harganya berupa Number
                 items: Array.isArray(t.items) ? t.items.map((item: any) => ({
                   ...item,
                   price: Number(item.price || 0),
-                  costPrice: Number(item.costPrice ?? item.cost_price ?? 0)
+                  costPrice: Number(item.costPrice ?? item.cost_price ?? 0),
+                  quantity: Number(item.quantity || 0)
                 })) : [],
                 total: Number(t.total || 0),
                 subtotal: Number(t.subtotal || 0),
                 discount: Number(t.discount || 0)
               }));
+              
               set({ transactions: normalizedTx });
             }
           }
         } catch (err) {
-          console.error('[DEBUG] Fetch transactions error:', err);
+          console.error('[STORE] Fetch transactions error:', err);
         }
       },
       
       addTransaction: async (t) => {
         set({ connectionStatus: 'SYNCING' });
         try {
-          // Double check: Pastikan semua item punya costPrice sebelum kirim
-          const payload = {
-            ...t,
-            items: t.items.map(item => ({
-              ...item,
-              costPrice: item.costPrice || 0
-            }))
-          };
-
           const res = await fetch(`${API_URL}/transactions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(t)
           });
           if (res.ok) {
             await get().fetchTransactions();
           } else {
-            get().addToast('ERROR', 'Gagal', 'Transaksi gagal disimpan di server.');
+            get().addToast('ERROR', 'Gagal', 'Gagal menyimpan transaksi ke server.');
           }
         } catch (err) {
           set({ connectionStatus: 'DISCONNECTED' });
@@ -233,7 +228,7 @@ export const useStore = create<AppState>()(
           });
           if (res.ok) {
             await get().fetchTransactions();
-            get().addToast('INFO', 'Dibatalkan', `Transaksi #${id} telah di-void.`);
+            get().addToast('INFO', 'Dibatalkan', `Transaksi #${id} di-void.`);
           }
         } catch (err) {}
       },
@@ -260,7 +255,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-v9', // Versi storage baru agar refresh state
+      name: 'angkringan-pos-v10', // Reset local storage v10
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
