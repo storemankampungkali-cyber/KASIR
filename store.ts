@@ -176,28 +176,22 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-              console.log('[DEBUG] Raw Transactions from Server:', data);
-              const normalizedTx = data.map((t: any) => {
-                let validDate = t.createdAt;
-                try {
-                  const d = new Date(t.createdAt);
-                  if (isNaN(d.getTime())) throw new Error();
-                } catch {
-                  validDate = new Date().toISOString();
-                }
-                
-                return {
-                  ...t,
-                  createdAt: validDate,
-                  items: Array.isArray(t.items) ? t.items : [],
-                  total: Number(t.total || 0),
-                  subtotal: Number(t.subtotal || 0)
-                };
-              });
+              console.log('[DEBUG] Store received transactions:', data);
+              // Pastikan items selalu berupa array agar UI tidak crash
+              const normalizedTx = data.map((t: any) => ({
+                ...t,
+                items: Array.isArray(t.items) ? t.items : [],
+                total: Number(t.total || 0),
+                subtotal: Number(t.subtotal || 0)
+              }));
               set({ transactions: normalizedTx });
             }
+          } else {
+            console.error('[DEBUG] Fetch transactions failed with status:', res.status);
           }
-        } catch (err) {}
+        } catch (err) {
+          console.error('[DEBUG] Fetch transactions error:', err);
+        }
       },
       
       addTransaction: async (t) => {
@@ -209,21 +203,30 @@ export const useStore = create<AppState>()(
             body: JSON.stringify(t)
           });
           if (res.ok) {
+            console.log('[DEBUG] Transaction saved successfully to server');
             await get().fetchTransactions();
+          } else {
+            const errorText = await res.text();
+            console.error('[DEBUG] Server rejected transaction:', errorText);
+            get().addToast('ERROR', 'Gagal Sinkron', 'Transaksi tersimpan lokal tapi gagal dikirim ke server.');
           }
         } catch (err) {
+          console.error('[DEBUG] Network error saving transaction:', err);
           set({ connectionStatus: 'DISCONNECTED' });
         }
       },
       
       voidTransaction: async (id, reason) => {
         try {
-          await fetch(`${API_URL}/transactions/${id}/void`, {
+          const res = await fetch(`${API_URL}/transactions/${id}/void`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ voidReason: reason })
           });
-          await get().fetchTransactions();
+          if (res.ok) {
+            await get().fetchTransactions();
+            get().addToast('INFO', 'Dibatalkan', `Transaksi #${id} berhasil di-void.`);
+          }
         } catch (err) {}
       },
 
@@ -249,7 +252,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-v7',
+      name: 'angkringan-pos-v8', // Nama storage diubah agar refresh cache data
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
