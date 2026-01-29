@@ -41,7 +41,6 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// GET: Ambil SEMUA produk (buang WHERE is_active=1 supaya yang mati bisa dinyalain lagi)
 app.get('/api/products', async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -62,10 +61,8 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// POST: Tambah produk (Lebih toleran format data)
 app.post('/api/products', async (req, res) => {
   const b = req.body;
-  // Gunakan fallback jika salah satu format (camel/snake) tidak ada
   const data = {
     id: b.id,
     name: b.name,
@@ -83,17 +80,13 @@ app.post('/api/products', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err: any) {
-    console.error('Error POST:', err.message);
     res.status(500).json({ error: 'Gagal tambah produk', details: err.message });
   }
 });
 
-// PUT: Update produk (Penyebab Error 500 tadi di sini)
 app.put('/api/products/:id', async (req, res) => {
   const { id } = req.params;
   const b = req.body;
-  
-  // Ambil data dengan proteksi undefined (Penyebab Error 500)
   const name = b.name;
   const price = b.price;
   const cost_price = b.costPrice ?? b.cost_price ?? 0;
@@ -107,22 +100,46 @@ app.put('/api/products/:id', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err: any) {
-    console.error('Error PUT:', err.message);
     res.status(500).json({ error: 'Gagal update produk', details: err.message });
   }
 });
 
+// GET: Transactions - Perbaikan Join data rincian menu
 app.get('/api/transactions', async (req, res) => {
   try {
-    const [rows] = await pool.query(`
+    // 1. Ambil data transaksi utama
+    const [transactions]: any = await pool.query(`
       SELECT id, subtotal, discount, total, payment_method AS paymentMethod, 
              customer_name AS customerName, status, created_at AS createdAt, 
              outlet_id AS outletId, cashier_id AS cashierId 
-      FROM transactions ORDER BY created_at DESC LIMIT 50
+      FROM transactions ORDER BY created_at DESC LIMIT 100
     `);
-    res.json(rows);
+
+    if (transactions.length === 0) return res.json([]);
+
+    // 2. Ambil semua item untuk transaksi di atas
+    const txIds = transactions.map((t: any) => String(t.id));
+    const [items]: any = await pool.query(`
+      SELECT transaction_id, product_id as id, name, price, cost_price as costPrice, quantity, note 
+      FROM transaction_items 
+      WHERE transaction_id IN (?)
+    `, [txIds]);
+
+    console.log(`[API] Fetched ${transactions.length} transactions and ${items.length} items for them.`);
+
+    // 3. Gabungkan item ke masing-masing transaksi dengan perbandingan string yang bersih
+    const result = transactions.map((t: any) => {
+      const transactionItems = items.filter((item: any) => String(item.transaction_id) === String(t.id));
+      return {
+        ...t,
+        items: transactionItems
+      };
+    });
+
+    res.json(result);
   } catch (err: any) {
-    res.status(500).json({ error: 'Gagal ambil transaksi' });
+    console.error('Error fetching transactions:', err);
+    res.status(500).json({ error: 'Gagal ambil riwayat transaksi', details: err.message });
   }
 });
 

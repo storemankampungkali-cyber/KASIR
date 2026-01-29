@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Search, Calendar, Info, XCircle, History as HistoryIcon } from 'lucide-react';
+import { Search, Calendar, Info, XCircle, History as HistoryIcon, PackageX } from 'lucide-react';
 import { useStore } from '../store';
 import { Transaction } from '../types';
 import { formatCurrency } from '../utils';
@@ -206,15 +206,22 @@ const History: React.FC = () => {
               <div>
                 <h3 className="text-slate-400 font-bold text-[10px] uppercase mb-4 tracking-[0.2em]">Daftar Menu</h3>
                 <div className="space-y-3">
-                  {(selectedTx.items || []).map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
-                      <div>
-                        <p className="font-black text-slate-800">{item.name}</p>
-                        <p className="text-xs text-slate-400 font-bold">{item.quantity} x {formatCurrency(item.price)}</p>
-                      </div>
-                      <p className="font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</p>
+                  {(!selectedTx.items || selectedTx.items.length === 0) ? (
+                    <div className="p-8 border-2 border-dashed border-slate-100 rounded-3xl flex flex-col items-center justify-center text-slate-300">
+                      <PackageX size={32} className="mb-2 opacity-50" />
+                      <p className="text-xs font-bold text-center">Rincian menu tidak ditemukan di database untuk transaksi ini.</p>
                     </div>
-                  ))}
+                  ) : (
+                    selectedTx.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                        <div>
+                          <p className="font-black text-slate-800">{item.name}</p>
+                          <p className="text-xs text-slate-400 font-bold">{item.quantity} x {formatCurrency(item.price)}</p>
+                        </div>
+                        <p className="font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
