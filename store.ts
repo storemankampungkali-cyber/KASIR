@@ -79,7 +79,7 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             const end = Date.now();
             const data = await res.json();
-            if (data.database === 'CONNECTED') {
+            if (data && data.database === 'CONNECTED') {
               set({ latency: end - start, connectionStatus: 'CONNECTED' });
             } else {
               set({ latency: null, connectionStatus: 'DISCONNECTED' });
@@ -97,29 +97,29 @@ export const useStore = create<AppState>()(
       
       products: [],
       fetchProducts: async () => {
-        console.log(`[API] Fetching products...`);
         try {
           const res = await fetch(`${API_URL}/products`);
-          if (!res.ok) throw new Error(`Server returned ${res.status}`);
+          if (!res.ok) throw new Error(`Server error: ${res.status}`);
           const rawData = await res.json();
           
-          // NORMALISASI DATA (Anti-Gagal jika Backend kirim snake_case)
+          if (!Array.isArray(rawData)) {
+            console.warn("[API] Data produk bukan array:", rawData);
+            return;
+          }
+
           const normalizedProducts = rawData.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            // Pastikan harga jadi angka (MySQL Decimal sering jadi string)
-            price: Number(p.price),
+            id: p.id || generateId(),
+            name: p.name || 'Tanpa Nama',
+            price: Number(p.price || 0),
             costPrice: Number(p.costPrice ?? p.cost_price ?? 0),
-            category: p.category,
-            // Deteksi isActive baik dari camelCase, snake_case, atau angka 1/0
+            category: p.category || 'Lainnya',
             isActive: p.isActive === true || p.isActive === 1 || p.is_active === 1 || p.is_active === true,
             outletId: p.outletId ?? p.outlet_id ?? 'o1'
           }));
 
-          console.log(`[API] Normalized products:`, normalizedProducts);
           set({ products: normalizedProducts, connectionStatus: 'CONNECTED' });
         } catch (err: any) {
-          console.error(`[API ERROR] Gagal ambil produk:`, err.message);
+          console.error(`[API ERROR]`, err.message);
           set({ connectionStatus: 'DISCONNECTED' });
         }
       },
@@ -137,7 +137,7 @@ export const useStore = create<AppState>()(
           await get().fetchProducts();
           get().addToast('SUCCESS', 'Tersimpan', `${newProduct.name} berhasil ditambahkan.`);
         } catch (err: any) {
-          get().addToast('ERROR', 'Koneksi Bermasalah', 'Gagal menyimpan ke server.');
+          get().addToast('ERROR', 'Gagal', 'Gagal menyimpan ke server.');
         }
       },
       
@@ -151,7 +151,6 @@ export const useStore = create<AppState>()(
           });
           if (!res.ok) throw new Error('Update failed');
           await get().fetchProducts();
-          set({ connectionStatus: 'CONNECTED' });
         } catch (err) {
           set({ connectionStatus: 'DISCONNECTED' });
         }
@@ -181,12 +180,11 @@ export const useStore = create<AppState>()(
       fetchTransactions: async () => {
         try {
           const res = await fetch(`${API_URL}/transactions`);
-          if (!res.ok) throw new Error('Response not OK');
-          const data = await res.json();
-          set({ transactions: data, connectionStatus: 'CONNECTED' });
-        } catch (err) {
-          set({ connectionStatus: 'DISCONNECTED' });
-        }
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) set({ transactions: data });
+          }
+        } catch (err) {}
       },
       
       addTransaction: async (t) => {
@@ -199,30 +197,21 @@ export const useStore = create<AppState>()(
           });
           if (res.ok) {
             await get().fetchTransactions();
-            set({ connectionStatus: 'CONNECTED' });
-          } else {
-             throw new Error('Save failed');
           }
         } catch (err) {
           set({ connectionStatus: 'DISCONNECTED' });
-          set((state) => ({ transactions: [t, ...state.transactions] }));
         }
       },
       
       voidTransaction: async (id, reason) => {
-        set({ connectionStatus: 'SYNCING' });
         try {
-          const res = await fetch(`${API_URL}/transactions/${id}/void`, {
+          await fetch(`${API_URL}/transactions/${id}/void`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ voidReason: reason })
           });
-          if (!res.ok) throw new Error('Void failed');
           await get().fetchTransactions();
-          set({ connectionStatus: 'CONNECTED' });
-        } catch (err) {
-          set({ connectionStatus: 'DISCONNECTED' });
-        }
+        } catch (err) {}
       },
 
       qrisConfig: { merchantName: 'ANGKRINGAN PRO', qrImageUrl: '', isActive: true },
@@ -241,17 +230,13 @@ export const useStore = create<AppState>()(
       toasts: [],
       addToast: (type, title, message) => {
         const id = Math.random().toString(36).substring(2, 9);
-        set((state) => ({
-          toasts: [...state.toasts, { id, type, title, message }]
-        }));
+        set((state) => ({ toasts: [...state.toasts, { id, type, title, message }] }));
         setTimeout(() => get().removeToast(id), 4000);
       },
-      removeToast: (id) => set((state) => ({
-        toasts: state.toasts.filter((t) => t.id !== id)
-      })),
+      removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-proxy-v2',
+      name: 'angkringan-pos-v4', // Ganti nama agar storage bersih
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
