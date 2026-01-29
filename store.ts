@@ -97,13 +97,27 @@ export const useStore = create<AppState>()(
       
       products: [],
       fetchProducts: async () => {
-        console.log(`[API] Fetching products from ${API_URL}/products...`);
+        console.log(`[API] Fetching products...`);
         try {
           const res = await fetch(`${API_URL}/products`);
           if (!res.ok) throw new Error(`Server returned ${res.status}`);
-          const data = await res.json();
-          console.log(`[API] Received ${data.length} products:`, data);
-          set({ products: data, connectionStatus: 'CONNECTED' });
+          const rawData = await res.json();
+          
+          // NORMALISASI DATA (Anti-Gagal jika Backend kirim snake_case)
+          const normalizedProducts = rawData.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            // Pastikan harga jadi angka (MySQL Decimal sering jadi string)
+            price: Number(p.price),
+            costPrice: Number(p.costPrice ?? p.cost_price ?? 0),
+            category: p.category,
+            // Deteksi isActive baik dari camelCase, snake_case, atau angka 1/0
+            isActive: p.isActive === true || p.isActive === 1 || p.is_active === 1 || p.is_active === true,
+            outletId: p.outletId ?? p.outlet_id ?? 'o1'
+          }));
+
+          console.log(`[API] Normalized products:`, normalizedProducts);
+          set({ products: normalizedProducts, connectionStatus: 'CONNECTED' });
         } catch (err: any) {
           console.error(`[API ERROR] Gagal ambil produk:`, err.message);
           set({ connectionStatus: 'DISCONNECTED' });
@@ -113,7 +127,6 @@ export const useStore = create<AppState>()(
       addProduct: async (p) => {
         set({ connectionStatus: 'SYNCING' });
         const newProduct = { ...p, id: generateId() };
-        console.log(`[API] Adding product:`, newProduct);
         try {
           const res = await fetch(`${API_URL}/products`, {
             method: 'POST',
@@ -121,12 +134,9 @@ export const useStore = create<AppState>()(
             body: JSON.stringify(newProduct)
           });
           if (!res.ok) throw new Error('Create failed');
-          console.log(`[API] Product added successfully`);
           await get().fetchProducts();
           get().addToast('SUCCESS', 'Tersimpan', `${newProduct.name} berhasil ditambahkan.`);
         } catch (err: any) {
-          console.error(`[API ERROR] Gagal tambah produk:`, err.message);
-          set({ connectionStatus: 'DISCONNECTED' });
           get().addToast('ERROR', 'Koneksi Bermasalah', 'Gagal menyimpan ke server.');
         }
       },
