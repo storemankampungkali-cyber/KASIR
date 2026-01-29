@@ -4,10 +4,8 @@ import cors from 'cors';
 import { pool, initDatabase } from './db';
 
 const app = express();
-// Railway/VPS biasanya menggunakan port dari env, jika tidak ada pakai 3030
 const PORT = process.env.PORT || 3030;
 
-// Middleware logging yang lebih detail untuk monitoring VPS
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -25,20 +23,13 @@ app.use(cors({
 
 app.use(express.json() as any);
 
-// Root route untuk cek status server via Browser (http://IP_VPS)
 app.get('/', (req, res) => {
-  // Fix: Property 'uptime' does not exist on type 'Process'. Casting to any to access Node.js runtime uptime.
   const uptimeSeconds = Math.floor((process as any).uptime());
-  
   res.send(`
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 50px; background: #f4f7f9; min-height: 100vh;">
       <div style="background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); display: inline-block;">
         <h1 style="color: #4089C9; margin-bottom: 10px;">🚀 Angkringan POS API Online!</h1>
         <p style="color: #64748b;">Backend VPS berhasil diakses pada <b>${new Date().toLocaleString()}</b></p>
-        <div style="margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 10px; font-family: monospace; font-size: 14px; text-align: left;">
-          <b>Status Database:</b> Checking... <br/>
-          <b>Uptime:</b> ${uptimeSeconds} detik
-        </div>
         <p style="margin-top: 20px; font-size: 12px; color: #94a3b8;">Endpoint API: <code>/api/products</code> | Health: <code>/health</code></p>
       </div>
     </div>
@@ -54,15 +45,27 @@ app.get('/health', async (req, res) => {
       timestamp: new Date().toISOString() 
     });
   } catch (err: any) {
-    console.error('❌ Health Check Failed:', err.message);
     res.status(500).json({ status: 'DOWN', error: err.message });
   }
 });
 
-// API Routes
+// API Routes - DITAMBAHKAN ALIAS KOLOM (isActive, costPrice, outletId)
 app.get('/api/products', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM products WHERE is_active = 1 ORDER BY category, name');
+    // Kita panggil manual nama kolomnya supaya pas dengan interface di Frontend
+    const [rows] = await pool.query(`
+      SELECT 
+        id, 
+        name, 
+        price, 
+        cost_price AS costPrice, 
+        category, 
+        is_active AS isActive, 
+        outlet_id AS outletId 
+      FROM products 
+      WHERE is_active = 1 
+      ORDER BY category, name
+    `);
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: 'Gagal ambil produk', details: err.message });
@@ -84,7 +87,22 @@ app.post('/api/products', async (req, res) => {
 
 app.get('/api/transactions', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM transactions ORDER BY created_at DESC LIMIT 50');
+    const [rows] = await pool.query(`
+      SELECT 
+        id, 
+        subtotal, 
+        discount, 
+        total, 
+        payment_method AS paymentMethod, 
+        customer_name AS customerName, 
+        status, 
+        created_at AS createdAt, 
+        outlet_id AS outletId, 
+        cashier_id AS cashierId 
+      FROM transactions 
+      ORDER BY created_at DESC 
+      LIMIT 50
+    `);
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: 'Gagal ambil transaksi' });
@@ -154,16 +172,7 @@ app.put('/api/config/qris', async (req, res) => {
   }
 });
 
-// Menjalankan server pada 0.0.0.0 agar bisa menerima koneksi eksternal
 const server = app.listen(Number(PORT), '0.0.0.0', async () => {
-  console.log(`
-  --------------------------------------------------
-  🚀 ANGKRINGAN POS SERVER IS RUNNING
-  --------------------------------------------------
-  📍 Local:    http://localhost:${PORT}
-  📍 Network:  http://0.0.0.0:${PORT}
-  --------------------------------------------------
-  `);
-  
+  console.log(`🚀 API RUNNING ON PORT ${PORT}`);
   await initDatabase();
 });
