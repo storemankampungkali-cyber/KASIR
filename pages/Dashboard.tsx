@@ -11,18 +11,20 @@ import {
 const Dashboard: React.FC = () => {
   const { transactions, products } = useStore();
   
-  const completed = transactions.filter(t => t.status === 'COMPLETED');
-  const revenue = completed.reduce((acc, t) => acc + t.total, 0);
+  const completed = (transactions || []).filter(t => t.status === 'COMPLETED');
+  const revenue = completed.reduce((acc, t) => acc + Number(t.total || 0), 0);
+  
+  // Perhitungan profit dengan proteksi data kosong (Anti-Crash)
   const profit = completed.reduce((acc, t) => {
-    const cost = t.items.reduce((sum, item) => sum + (item.costPrice * item.quantity), 0);
-    return acc + (t.total - cost);
+    const cost = (t.items || []).reduce((sum, item) => sum + (Number(item.costPrice || 0) * Number(item.quantity || 0)), 0);
+    return acc + (Number(t.total || 0) - cost);
   }, 0);
 
   const kpis = [
     { label: 'Total Penjualan', value: formatCurrency(revenue), icon: DollarSign },
     { label: 'Total Keuntungan', value: formatCurrency(profit), icon: TrendingUp },
     { label: 'Jumlah Transaksi', value: completed.length.toString(), icon: Users },
-    { label: 'Stok Item Aktif', value: products.filter(p => p.isActive).length.toString(), icon: Package },
+    { label: 'Stok Item Aktif', value: (products || []).filter(p => p.isActive).length.toString(), icon: Package },
   ];
 
   const chartData = [
@@ -59,7 +61,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Blue Gradient Box (Paper.id Reference) */}
+      {/* KPI Blue Gradient Box */}
       <div className="bg-gradient-to-r from-[#4089C9] to-[#59A4DE] rounded-[32px] p-1 shadow-2xl shadow-blue-900/10 overflow-hidden">
         <div className="bg-white/5 backdrop-blur-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-white/20">
           {kpis.map((kpi, idx) => (
@@ -123,7 +125,7 @@ const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {products.slice(0, 6).map((p, i) => (
+                {(products || []).slice(0, 6).map((p, i) => (
                   <tr key={i} className="group hover:bg-slate-50/80 transition-all">
                     <td className="py-4">
                       <div className="flex items-center space-x-4">

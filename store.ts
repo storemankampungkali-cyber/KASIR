@@ -102,10 +102,7 @@ export const useStore = create<AppState>()(
           if (!res.ok) throw new Error(`Server error: ${res.status}`);
           const rawData = await res.json();
           
-          if (!Array.isArray(rawData)) {
-            console.warn("[API] Data produk bukan array:", rawData);
-            return;
-          }
+          if (!Array.isArray(rawData)) return;
 
           const normalizedProducts = rawData.map((p: any) => ({
             id: p.id || generateId(),
@@ -119,7 +116,6 @@ export const useStore = create<AppState>()(
 
           set({ products: normalizedProducts, connectionStatus: 'CONNECTED' });
         } catch (err: any) {
-          console.error(`[API ERROR]`, err.message);
           set({ connectionStatus: 'DISCONNECTED' });
         }
       },
@@ -182,7 +178,16 @@ export const useStore = create<AppState>()(
           const res = await fetch(`${API_URL}/transactions`);
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data)) set({ transactions: data });
+            if (Array.isArray(data)) {
+              // PROTEKSI: Pastikan setiap transaksi punya array items agar tidak crash
+              const normalizedTx = data.map((t: any) => ({
+                ...t,
+                items: Array.isArray(t.items) ? t.items : [],
+                total: Number(t.total || 0),
+                subtotal: Number(t.subtotal || 0)
+              }));
+              set({ transactions: normalizedTx });
+            }
           }
         } catch (err) {}
       },
@@ -236,7 +241,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-v4', // Ganti nama agar storage bersih
+      name: 'angkringan-pos-v5', // Naikkan versi lagi agar clear
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
