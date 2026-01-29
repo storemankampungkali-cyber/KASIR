@@ -10,10 +10,9 @@ const getDbConfig = () => {
     return {
       uri: process.env.MYSQL_URL,
       waitForConnections: true,
-      connectionLimit: 20,
+      connectionLimit: 10,
       queueLimit: 0,
       enableKeepAlive: true,
-      keepAliveInitialDelay: 10000,
       multipleStatements: true
     };
   }
@@ -25,10 +24,9 @@ const getDbConfig = () => {
     database: process.env.MYSQLDATABASE || 'railway',
     port: parseInt(process.env.MYSQLPORT || '3306'),
     waitForConnections: true,
-    connectionLimit: 20,
+    connectionLimit: 10,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 10000,
     multipleStatements: true
   };
 };
@@ -58,7 +56,7 @@ const SCHEMA_QUERIES = [
       price DECIMAL(15, 2) NOT NULL DEFAULT 0,
       cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
       category VARCHAR(50) NOT NULL,
-      is_active BOOLEAN DEFAULT TRUE,
+      is_active TINYINT(1) DEFAULT 1,
       outlet_id VARCHAR(50),
       FOREIGN KEY (outlet_id) REFERENCES outlets(id)
   )`,
@@ -96,14 +94,14 @@ export const initDatabase = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    console.log('🔄 Reset & Sync Database Schema...');
+    console.log('🔄 Checking Database Schema Consistency...');
     for (const query of SCHEMA_QUERIES) {
       await connection.query(query);
     }
     console.log('✅ Database Ready.');
     return true;
   } catch (err: any) {
-    console.error('❌ Database Error:', err.message);
+    console.error('❌ Database Sync Failed:', err.message);
     return false;
   } finally {
     if (connection) connection.release();

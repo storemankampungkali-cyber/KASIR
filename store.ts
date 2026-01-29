@@ -72,13 +72,22 @@ export const useStore = create<AppState>()(
           const res = await fetch(`${API_URL}/products`);
           const data = await res.json();
           if (Array.isArray(data)) {
-            set({ products: data.map((p: any) => ({
-              ...p,
+            // Map the API data strictly
+            const mapped = data.map((p: any) => ({
+              id: p.id,
+              name: p.name,
               price: Number(p.price || 0),
-              costPrice: Number(p.costPrice || p.cost_price || 0)
-            })) });
+              costPrice: Number(p.costPrice || p.cost_price || 0),
+              category: p.category,
+              isActive: p.isActive === true || p.is_active === 1 || p.isActive === 1,
+              outletId: p.outletId || p.outlet_id
+            }));
+            set({ products: mapped });
+            console.log('[STORE] Products Refreshed:', mapped.length);
           }
-        } catch (err) {}
+        } catch (err) {
+          console.error('[STORE] Fetch Products Failed', err);
+        }
       },
 
       addProduct: async (p) => {
@@ -94,13 +103,29 @@ export const useStore = create<AppState>()(
 
       updateProduct: async (p) => {
         try {
-          await fetch(`${API_URL}/products/${p.id}`, {
+          // Send specific mapping for API stability
+          const payload = {
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            costPrice: p.costPrice,
+            category: p.category,
+            isActive: p.isActive,
+            outletId: p.outletId
+          };
+          
+          const res = await fetch(`${API_URL}/products/${p.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(p)
+            body: JSON.stringify(payload)
           });
-          await get().fetchProducts();
-        } catch (err) {}
+          
+          if (res.ok) {
+            await get().fetchProducts();
+          }
+        } catch (err) {
+          console.error('[STORE] Update Product Failed', err);
+        }
       },
 
       cart: [],
@@ -122,27 +147,8 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-              const normalized = data.map((t: any) => ({
-                id: t.id,
-                subtotal: Number(t.subtotal || 0),
-                discount: Number(t.discount || 0),
-                total: Number(t.total || 0),
-                paymentMethod: t.paymentMethod || t.payment_method,
-                customerName: t.customerName || t.customer_name,
-                status: t.status,
-                createdAt: t.createdAt || t.created_at,
-                outletId: t.outletId || t.outlet_id,
-                cashierId: t.cashierId || t.cashier_id,
-                voidReason: t.voidReason || t.void_reason,
-                items: Array.isArray(t.items) ? t.items.map((i: any) => ({
-                  id: i.id || i.product_id,
-                  name: i.name || i.item_name,
-                  price: Number(i.price || i.item_price || 0),
-                  costPrice: Number(i.costPrice || i.item_cost_price || 0),
-                  quantity: Number(i.quantity || i.item_quantity || 0)
-                })) : []
-              }));
-              set({ transactions: normalized });
+              set({ transactions: data });
+              console.log('[STORE] Transactions Loaded:', data.length);
             }
           }
         } catch (err) {}
@@ -156,18 +162,23 @@ export const useStore = create<AppState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(t)
           });
-          if (res.ok) await get().fetchTransactions();
-        } catch (err) {}
+          if (res.ok) {
+             await get().fetchTransactions();
+             set({ connectionStatus: 'CONNECTED' });
+          }
+        } catch (err) {
+          set({ connectionStatus: 'DISCONNECTED' });
+        }
       },
 
       voidTransaction: async (id, reason) => {
         try {
-          await fetch(`${API_URL}/transactions/${id}/void`, {
+          const res = await fetch(`${API_URL}/transactions/${id}/void`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ voidReason: reason })
           });
-          await get().fetchTransactions();
+          if (res.ok) await get().fetchTransactions();
         } catch (err) {}
       },
 
@@ -180,7 +191,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-vFinal-Reset',
+      name: 'angkringan-pos-vFinal', // Reset local storage name to avoid stale data
       partialize: (state) => ({ currentUser: state.currentUser, theme: state.theme })
     }
   )

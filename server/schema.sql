@@ -1,16 +1,15 @@
 
--- Database Schema for Angkringan POS Pro
--- CREATE DATABASE IF NOT EXISTS angkringan_pos; -- Di Railway DB otomatis dibuat
--- USE angkringan_pos;
+-- DATABASE REBUILD - ANGKRINGAN POS PRO
+-- Clean and robust schema for MySQL
 
--- Outlets Table
+-- 1. Outlets Table
 CREATE TABLE IF NOT EXISTS outlets (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     address TEXT
 );
 
--- Users Table
+-- 2. Users Table
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -20,24 +19,26 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (outlet_id) REFERENCES outlets(id)
 );
 
--- Products Table
+-- 3. Products Table (The core of the issue)
 CREATE TABLE IF NOT EXISTS products (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    price DECIMAL(15, 2) NOT NULL,
-    cost_price DECIMAL(15, 2) NOT NULL,
+    price DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0,
     category VARCHAR(50) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
+    is_active TINYINT(1) DEFAULT 1, -- Explicit TinyInt for Boolean
     outlet_id VARCHAR(50),
+    INDEX idx_category (category),
+    INDEX idx_active (is_active),
     FOREIGN KEY (outlet_id) REFERENCES outlets(id)
 );
 
--- Transactions Table
+-- 4. Transactions Table
 CREATE TABLE IF NOT EXISTS transactions (
     id VARCHAR(50) PRIMARY KEY,
-    subtotal DECIMAL(15, 2) NOT NULL,
+    subtotal DECIMAL(15, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(15, 2) DEFAULT 0,
-    total DECIMAL(15, 2) NOT NULL,
+    total DECIMAL(15, 2) NOT NULL DEFAULT 0,
     payment_method VARCHAR(20) NOT NULL,
     customer_name VARCHAR(100),
     status ENUM('COMPLETED', 'VOIDED') DEFAULT 'COMPLETED',
@@ -45,11 +46,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     outlet_id VARCHAR(50),
     cashier_id VARCHAR(50),
+    INDEX idx_created (created_at),
     FOREIGN KEY (outlet_id) REFERENCES outlets(id),
     FOREIGN KEY (cashier_id) REFERENCES users(id)
 );
 
--- Transaction Items Table (Snapshot of product data at purchase time)
+-- 5. Transaction Items Table
 CREATE TABLE IF NOT EXISTS transaction_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     transaction_id VARCHAR(50),
@@ -62,13 +64,6 @@ CREATE TABLE IF NOT EXISTS transaction_items (
     FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
 );
 
--- App Config Table (QRIS, etc)
-CREATE TABLE IF NOT EXISTS app_config (
-    config_key VARCHAR(50) PRIMARY KEY,
-    config_value JSON NOT NULL
-);
-
--- Seed Initial Data (Gunakan IGNORE agar tidak error duplikat saat restart)
+-- Initial Seeding
 INSERT IGNORE INTO outlets (id, name, address) VALUES ('o1', 'Angkringan Pusat', 'Jl. Malioboro No. 1');
 INSERT IGNORE INTO users (id, name, role, outlet_id, pin) VALUES ('u1', 'Alfian Dimas', 'ADMIN', 'o1', '123456');
-INSERT IGNORE INTO app_config (config_key, config_value) VALUES ('qris', '{"merchantName": "ANGKRINGAN PRO", "isActive": true, "qrImageUrl": ""}');

@@ -6,21 +6,26 @@ import { pool, initDatabase } from './db';
 const app = express();
 const PORT = process.env.PORT || 3030;
 
+// Utility for strict numeric conversion
 const toNum = (val: any) => {
   const n = parseFloat(val);
   return isNaN(n) ? 0 : n;
 };
 
+// Middleware
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }) as any);
 app.use(express.json() as any);
 
+// Logging
 app.use((req: any, res: any, next: NextFunction) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
+// JSON BigInt fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 
+// Health Check
 app.get('/health', async (req, res) => {
   try {
     const [rows]: any = await pool.query('SELECT 1 as ok');
@@ -30,23 +35,25 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// --- API PRODUK ---
+// --- API PRODUK (Strict Rebuild) ---
 
 app.get('/api/products', async (req, res) => {
   try {
-    const [rows]: any = await pool.query('SELECT * FROM products ORDER BY category, name');
+    const [rows]: any = await pool.query('SELECT * FROM products ORDER BY category ASC, name ASC');
+    // Map database snake_case to frontend camelCase
     const products = rows.map((p: any) => ({
       id: p.id,
       name: p.name,
       price: toNum(p.price),
       costPrice: toNum(p.cost_price),
       category: p.category,
-      isActive: p.is_active === 1 || p.is_active === true,
+      isActive: p.is_active === 1, // Convert TINYINT to Boolean
       outletId: p.outlet_id
     }));
     res.json(products);
   } catch (err) {
-    res.status(500).json({ error: 'Gagal tarik produk' });
+    console.error('GET PRODUCTS ERROR:', err);
+    res.status(500).json({ error: 'Gagal memuat produk' });
   }
 });
 
@@ -55,10 +62,11 @@ app.post('/api/products', async (req, res) => {
   try {
     await pool.query(
       'INSERT INTO products (id, name, price, cost_price, category, is_active, outlet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, name, price, costPrice, category, isActive ? 1 : 0, outletId]
+      [id, name, toNum(price), toNum(costPrice), category, isActive ? 1 : 0, outletId || 'o1']
     );
-    res.json({ success: true });
+    res.json({ success: true, message: 'Produk berhasil ditambahkan' });
   } catch (err: any) {
+    console.error('POST PRODUCT ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -69,36 +77,39 @@ app.put('/api/products/:id', async (req, res) => {
   try {
     await pool.query(
       'UPDATE products SET name = ?, price = ?, cost_price = ?, category = ?, is_active = ? WHERE id = ?',
-      [name, price, costPrice, category, isActive ? 1 : 0, id]
+      [name, toNum(price), toNum(costPrice), category, isActive ? 1 : 0, id]
     );
-    res.json({ success: true });
+    console.log(`[API] Product ${id} updated status to ${isActive}`);
+    res.json({ success: true, message: 'Produk berhasil diperbarui' });
   } catch (err: any) {
+    console.error('PUT PRODUCT ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// --- API TRANSAKSI ---
+// --- API TRANSAKSI (Strict Rebuild) ---
 
 app.get('/api/transactions', async (req, res) => {
   try {
+    // Join items in a single query for performance
     const [rows]: any = await pool.query(`
       SELECT 
-        t.id, t.subtotal, t.discount, t.total, t.payment_method, t.customer_name, 
+        t.id as tx_id, t.subtotal, t.discount, t.total, t.payment_method, t.customer_name, 
         t.status, t.created_at, t.outlet_id, t.cashier_id, t.void_reason,
         ti.product_id, ti.name as item_name, ti.price as item_price, 
-        ti.cost_price as item_cost_price, ti.quantity as item_quantity, ti.note as item_note
+        ti.cost_price as item_cost_price, ti.quantity as item_quantity
       FROM transactions t
       LEFT JOIN transaction_items ti ON t.id = ti.transaction_id
       ORDER BY t.created_at DESC
-      LIMIT 1000
+      LIMIT 500
     `);
 
     const txMap = new Map();
 
     rows.forEach((row: any) => {
-      if (!txMap.has(row.id)) {
-        txMap.set(row.id, {
-          id: row.id,
+      if (!txMap.has(row.tx_id)) {
+        txMap.set(row.tx_id, {
+          id: row.tx_id,
           subtotal: toNum(row.subtotal),
           discount: toNum(row.discount),
           total: toNum(row.total),
@@ -114,20 +125,19 @@ app.get('/api/transactions', async (req, res) => {
       }
 
       if (row.product_id) {
-        txMap.get(row.id).items.push({
+        txMap.get(row.tx_id).items.push({
           id: row.product_id,
           name: row.item_name,
           price: toNum(row.item_price),
           costPrice: toNum(row.item_cost_price),
-          quantity: parseInt(row.item_quantity) || 0,
-          note: row.item_note
+          quantity: parseInt(row.item_quantity) || 0
         });
       }
     });
 
     res.json(Array.from(txMap.values()));
   } catch (err: any) {
-    console.error('FETCH ERROR:', err);
+    console.error('FETCH TRANSACTIONS ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -135,7 +145,7 @@ app.get('/api/transactions', async (req, res) => {
 app.post('/api/transactions', async (req, res) => {
   const { id, items, subtotal, discount, total, paymentMethod, customerName, createdAt, outletId, cashierId } = req.body;
   
-  if (!items || items.length === 0) return res.status(400).json({ error: 'Keranjang kosong' });
+  if (!items || items.length === 0) return res.status(400).json({ error: 'Keranjang belanja kosong' });
 
   const conn = await pool.getConnection();
   try {
@@ -144,21 +154,22 @@ app.post('/api/transactions', async (req, res) => {
     await conn.query(
       `INSERT INTO transactions (id, subtotal, discount, total, payment_method, customer_name, status, created_at, outlet_id, cashier_id) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, subtotal, discount, total, paymentMethod, customerName || null, 'COMPLETED', new Date(createdAt), outletId, cashierId]
+      [id, toNum(subtotal), toNum(discount), toNum(total), paymentMethod, customerName || null, 'COMPLETED', new Date(createdAt), outletId, cashierId]
     );
 
     for (const item of items) {
       await conn.query(
-        `INSERT INTO transaction_items (transaction_id, product_id, name, price, cost_price, quantity, note) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, item.id, item.name, item.price, item.costPrice || 0, item.quantity, item.note || null]
+        `INSERT INTO transaction_items (transaction_id, product_id, name, price, cost_price, quantity) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [id, item.id, item.name, toNum(item.price), toNum(item.costPrice || 0), item.quantity]
       );
     }
 
     await conn.commit();
-    res.json({ success: true });
+    res.json({ success: true, message: 'Transaksi berhasil disimpan' });
   } catch (err: any) {
     await conn.rollback();
+    console.error('TRANSACTION SAVE ERROR:', err);
     res.status(500).json({ error: err.message });
   } finally {
     conn.release();
@@ -170,11 +181,13 @@ app.put('/api/transactions/:id/void', async (req, res) => {
   const { voidReason } = req.body;
   try {
     await pool.query('UPDATE transactions SET status = ?, void_reason = ? WHERE id = ?', ['VOIDED', voidReason, id]);
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: 'Gagal melakukan void' }); }
+    res.json({ success: true, message: 'Transaksi berhasil dibatalkan (void)' });
+  } catch (err) { 
+    res.status(500).json({ error: 'Gagal melakukan void transaksi' }); 
+  }
 });
 
 app.listen(Number(PORT), '0.0.0.0', async () => {
-  console.log(`🚀 POS SERVER ON PORT ${PORT}`);
+  console.log(`🚀 POS SERVER READY ON PORT ${PORT}`);
   await initDatabase();
 });
