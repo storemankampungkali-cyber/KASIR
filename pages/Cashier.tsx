@@ -366,4 +366,31 @@ const Cashier: React.FC = () => {
                   </div>
                   {cashReceived > total && (
                     <div className="flex justify-between items-center bg-emerald-50 p-4 rounded-2xl border border-emerald-100 animate-in fade-in">
-                       <span className="text-emerald-600 font-
+                       <span className="text-emerald-600 font-bold text-sm">KEMBALIAN</span>
+                       <span className="text-emerald-700 font-black text-xl">{formatCurrency(cashReceived - total)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex space-x-3 lg:space-x-4 pt-4 pb-4">
+                <button onClick={() => setShowCheckoutModal(false)} disabled={isProcessing} className="flex-1 py-4 lg:py-5 bg-slate-100 text-slate-400 font-black rounded-[24px] text-sm lg:text-base">BATAL</button>
+                <button
+                  onClick={handleCheckout}
+                  disabled={isProcessing || isCashInsufficient}
+                  className={`flex-[2] py-4 lg:py-5 text-white font-black text-base lg:text-xl rounded-[24px] shadow-2xl transition-all ${
+                    isCashInsufficient ? 'bg-slate-200 cursor-not-allowed' : 'bg-[#4089C9] shadow-[#4089C9]/40 active:scale-95'
+                  }`}
+                >
+                  {isProcessing ? 'MEMPROSES...' : 'KONFIRMASI BAYAR'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Cashier;
