@@ -30,6 +30,8 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// --- API PRODUK ---
+
 app.get('/api/products', async (req, res) => {
   try {
     const [rows]: any = await pool.query('SELECT * FROM products ORDER BY category, name');
@@ -47,6 +49,35 @@ app.get('/api/products', async (req, res) => {
     res.status(500).json({ error: 'Gagal tarik produk' });
   }
 });
+
+app.post('/api/products', async (req, res) => {
+  const { id, name, price, costPrice, category, isActive, outletId } = req.body;
+  try {
+    await pool.query(
+      'INSERT INTO products (id, name, price, cost_price, category, is_active, outlet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, name, price, costPrice, category, isActive ? 1 : 0, outletId]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/products/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, price, costPrice, category, isActive } = req.body;
+  try {
+    await pool.query(
+      'UPDATE products SET name = ?, price = ?, cost_price = ?, category = ?, is_active = ? WHERE id = ?',
+      [name, price, costPrice, category, isActive ? 1 : 0, id]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- API TRANSAKSI ---
 
 app.get('/api/transactions', async (req, res) => {
   try {
