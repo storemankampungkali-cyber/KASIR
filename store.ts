@@ -5,27 +5,26 @@ import { Product, CartItem, Transaction, Category, PaymentMethod, User } from '.
 import { generateId } from './utils';
 
 /**
- * STRATEGI URL:
- * Mencoba mengambil dari VITE_API_URL, jika tidak ada pakai localhost (local dev).
+ * STRATEGI PROXY VERCEL:
+ * Kita menggunakan path relatif '/api'. 
+ * Vercel akan membaca file vercel.json dan mem-proxy request ini ke http://159.223.57.240:3030/api
+ * Ini akan menghilangkan error 'Mixed Content' karena browser menganggap request tetap ke HTTPS.
  */
 const getBaseUrl = () => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL;
-  
-  // Jika sedang di produksi tapi env kosong, kita bisa fallback ke IP VPS Abang 
-  // atau biarkan default localhost jika sedang dev.
-  if (!envUrl) {
-    if (window.location.hostname !== 'localhost') {
-       // Masukkan IP VPS Abang di sini sebagai fallback jika env di Vercel lupa diset
-       return 'http://159.223.57.240/api'; 
-    }
+  // Jika di local development (Vite), kita pakai localhost
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return 'http://localhost:3030/api';
   }
   
-  return envUrl.replace(/\/$/, '');
+  // Di production (Vercel), gunakan path relatif agar melewati Vercel Rewrite/Proxy
+  return '/api';
 };
 
 const API_URL = getBaseUrl();
-const HEALTH_URL = API_URL.replace('/api', '/health');
+// Karena health di vercel.json diarahkan ke /health, kita sesuaikan
+const HEALTH_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3030/health' 
+  : '/health';
 
 export type ToastType = 'SUCCESS' | 'ERROR' | 'INFO';
 export type ConnectionStatus = 'CONNECTED' | 'SYNCING' | 'DISCONNECTED';
@@ -256,7 +255,7 @@ export const useStore = create<AppState>()(
       })),
     }),
     { 
-      name: 'angkringan-pos-vps',
+      name: 'angkringan-pos-proxy-v1',
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
