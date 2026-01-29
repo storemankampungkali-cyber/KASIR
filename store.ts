@@ -176,14 +176,14 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
+              console.log('[DEBUG] Raw Transactions from Server:', data);
               const normalizedTx = data.map((t: any) => {
-                // PROTEKSI TANGGAL: Cek apakah valid
                 let validDate = t.createdAt;
                 try {
                   const d = new Date(t.createdAt);
                   if (isNaN(d.getTime())) throw new Error();
                 } catch {
-                  validDate = new Date().toISOString(); // Jika rusak, ganti hari ini
+                  validDate = new Date().toISOString();
                 }
                 
                 return {
@@ -249,7 +249,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-v6', // Versi baru lagi biar data lokal bersih
+      name: 'angkringan-pos-v7',
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
