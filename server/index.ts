@@ -24,14 +24,10 @@ app.use(cors({
 app.use(express.json() as any);
 
 app.get('/', (req, res) => {
-  const uptimeSeconds = Math.floor((process as any).uptime());
   res.send(`
-    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 50px; background: #f4f7f9; min-height: 100vh;">
-      <div style="background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); display: inline-block;">
-        <h1 style="color: #4089C9; margin-bottom: 10px;">🚀 Angkringan POS API Online!</h1>
-        <p style="color: #64748b;">Backend VPS berhasil diakses pada <b>${new Date().toLocaleString()}</b></p>
-        <p style="margin-top: 20px; font-size: 12px; color: #94a3b8;">Endpoint API: <code>/api/products</code> | Health: <code>/health</code></p>
-      </div>
+    <div style="font-family: sans-serif; text-align: center; padding: 50px;">
+      <h1>🚀 Angkringan POS API Online!</h1>
+      <p>Backend siap melayani permintaan.</p>
     </div>
   `);
 });
@@ -39,20 +35,15 @@ app.get('/', (req, res) => {
 app.get('/health', async (req, res) => {
   try {
     const [rows]: any = await pool.query('SELECT 1 as ok');
-    res.json({ 
-      status: 'UP', 
-      database: rows[0]?.ok === 1 ? 'CONNECTED' : 'ERROR',
-      timestamp: new Date().toISOString() 
-    });
+    res.json({ status: 'UP', database: rows[0]?.ok === 1 ? 'CONNECTED' : 'ERROR' });
   } catch (err: any) {
     res.status(500).json({ status: 'DOWN', error: err.message });
   }
 });
 
-// API Routes - DITAMBAHKAN ALIAS KOLOM (isActive, costPrice, outletId)
+// GET: Ambil SEMUA produk (buang WHERE is_active=1 supaya yang mati bisa dinyalain lagi)
 app.get('/api/products', async (req, res) => {
   try {
-    // Kita panggil manual nama kolomnya supaya pas dengan interface di Frontend
     const [rows] = await pool.query(`
       SELECT 
         id, 
@@ -63,7 +54,6 @@ app.get('/api/products', async (req, res) => {
         is_active AS isActive, 
         outlet_id AS outletId 
       FROM products 
-      WHERE is_active = 1 
       ORDER BY category, name
     `);
     res.json(rows);
@@ -72,36 +62,63 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
+// POST: Tambah produk (Lebih toleran format data)
 app.post('/api/products', async (req, res) => {
-  const { id, name, price, costPrice, category, isActive, outletId } = req.body;
+  const b = req.body;
+  // Gunakan fallback jika salah satu format (camel/snake) tidak ada
+  const data = {
+    id: b.id,
+    name: b.name,
+    price: b.price,
+    cost_price: b.costPrice ?? b.cost_price ?? 0,
+    category: b.category,
+    is_active: b.isActive ?? b.is_active ?? 1,
+    outlet_id: b.outletId ?? b.outlet_id ?? 'o1'
+  };
+
   try {
     await pool.query(
       'INSERT INTO products (id, name, price, cost_price, category, is_active, outlet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, name, price, costPrice, category, isActive, outletId]
+      [data.id, data.name, data.price, data.cost_price, data.category, data.is_active, data.outlet_id]
     );
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: 'Gagal tambah produk' });
+    console.error('Error POST:', err.message);
+    res.status(500).json({ error: 'Gagal tambah produk', details: err.message });
+  }
+});
+
+// PUT: Update produk (Penyebab Error 500 tadi di sini)
+app.put('/api/products/:id', async (req, res) => {
+  const { id } = req.params;
+  const b = req.body;
+  
+  // Ambil data dengan proteksi undefined (Penyebab Error 500)
+  const name = b.name;
+  const price = b.price;
+  const cost_price = b.costPrice ?? b.cost_price ?? 0;
+  const category = b.category;
+  const is_active = (b.isActive === false || b.is_active === 0) ? 0 : 1;
+
+  try {
+    await pool.query(
+      'UPDATE products SET name=?, price=?, cost_price=?, category=?, is_active=? WHERE id=?',
+      [name, price, cost_price, category, is_active, id]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error PUT:', err.message);
+    res.status(500).json({ error: 'Gagal update produk', details: err.message });
   }
 });
 
 app.get('/api/transactions', async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT 
-        id, 
-        subtotal, 
-        discount, 
-        total, 
-        payment_method AS paymentMethod, 
-        customer_name AS customerName, 
-        status, 
-        created_at AS createdAt, 
-        outlet_id AS outletId, 
-        cashier_id AS cashierId 
-      FROM transactions 
-      ORDER BY created_at DESC 
-      LIMIT 50
+      SELECT id, subtotal, discount, total, payment_method AS paymentMethod, 
+             customer_name AS customerName, status, created_at AS createdAt, 
+             outlet_id AS outletId, cashier_id AS cashierId 
+      FROM transactions ORDER BY created_at DESC LIMIT 50
     `);
     res.json(rows);
   } catch (err: any) {
@@ -121,7 +138,7 @@ app.post('/api/transactions', async (req, res) => {
     for (const item of items) {
       await connection.query(
         'INSERT INTO transaction_items (transaction_id, product_id, name, price, cost_price, quantity, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [id, item.id, item.name, item.price, item.costPrice, item.quantity, item.note]
+        [id, item.id, item.name, item.price, item.costPrice ?? item.cost_price ?? 0, item.quantity, item.note]
       );
     }
     await connection.commit();
@@ -145,20 +162,6 @@ app.put('/api/transactions/:id/void', async (req, res) => {
   }
 });
 
-app.put('/api/products/:id', async (req, res) => {
-  const { id } = req.params;
-  const { name, price, costPrice, category, isActive } = req.body;
-  try {
-    await pool.query(
-      'UPDATE products SET name=?, price=?, cost_price=?, category=?, is_active=? WHERE id=?',
-      [name, price, costPrice, category, isActive, id]
-    );
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Gagal update produk' });
-  }
-});
-
 app.put('/api/config/qris', async (req, res) => {
   const config = req.body;
   try {
@@ -173,6 +176,6 @@ app.put('/api/config/qris', async (req, res) => {
 });
 
 const server = app.listen(Number(PORT), '0.0.0.0', async () => {
-  console.log(`🚀 API RUNNING ON PORT ${PORT}`);
+  console.log(`🚀 API REPAIRED & RUNNING ON PORT ${PORT}`);
   await initDatabase();
 });
