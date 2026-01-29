@@ -12,17 +12,33 @@ const History: React.FC = () => {
   const [voidReason, setVoidReason] = useState('');
   const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
 
+  // Helper: Fungsi ambil tanggal format YYYY-MM-DD dengan aman agar tidak crash
+  const getSafeDate = (dateInput: any): Date => {
+    try {
+      if (!dateInput) return new Date();
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime())) return new Date();
+      return d;
+    } catch {
+      return new Date();
+    }
+  };
+
+  const getSafeDateString = (dateInput: any) => {
+    return getSafeDate(dateInput).toISOString().split('T')[0];
+  };
+
   // Default range: last 7 days for history
   const now = new Date();
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(now.getDate() - 7);
   
-  const [startDate, setStartDate] = useState(sevenDaysAgo.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(getSafeDateString(sevenDaysAgo));
+  const [endDate, setEndDate] = useState(getSafeDateString(now));
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      const txDate = new Date(t.createdAt).toISOString().split('T')[0];
+    return (transactions || []).filter((t) => {
+      const txDate = getSafeDateString(t.createdAt);
       const matchDate = txDate >= startDate && txDate <= endDate;
       const searchStr = `${t.id} ${t.customerName || ''}`.toLowerCase();
       const matchSearch = searchStr.includes(searchQuery.toLowerCase());
@@ -37,6 +53,21 @@ const History: React.FC = () => {
       setVoidReason('');
       setSelectedTx(null);
     }
+  };
+
+  const formatDateLabel = (dateInput: any) => {
+    const d = getSafeDate(dateInput);
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+  };
+
+  const formatTimeLabel = (dateInput: any) => {
+    const d = getSafeDate(dateInput);
+    return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatFullDateTime = (dateInput: any) => {
+    const d = getSafeDate(dateInput);
+    return d.toLocaleString('id-ID');
   };
 
   return (
@@ -122,13 +153,13 @@ const History: React.FC = () => {
                       )}
                     </h4>
                     <p className="text-sm text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-                      {new Date(tx.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} • {new Date(tx.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} • {tx.paymentMethod}
+                      {formatDateLabel(tx.createdAt)} • {formatTimeLabel(tx.createdAt)} • {tx.paymentMethod}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-black text-2xl text-slate-900">{formatCurrency(tx.total)}</p>
-                  <p className="text-xs text-slate-400 font-bold uppercase">{tx.items.length} Menu Dipesan</p>
+                  <p className="text-xs text-slate-400 font-bold uppercase">{(tx.items || []).length} Menu Dipesan</p>
                 </div>
               </div>
             ))
@@ -136,7 +167,7 @@ const History: React.FC = () => {
         </div>
       </div>
 
-      {/* Details Modal & Void Modal (Unchanged) */}
+      {/* Details Modal */}
       {selectedTx && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={() => setSelectedTx(null)}></div>
@@ -151,7 +182,7 @@ const History: React.FC = () => {
                 <div className="space-y-4">
                    <div className="flex justify-between">
                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Waktu</span>
-                     <span className="text-sm font-black text-slate-800">{new Date(selectedTx.createdAt).toLocaleString('id-ID')}</span>
+                     <span className="text-sm font-black text-slate-800">{formatFullDateTime(selectedTx.createdAt)}</span>
                    </div>
                    <div className="flex justify-between">
                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Metode</span>
@@ -175,7 +206,7 @@ const History: React.FC = () => {
               <div>
                 <h3 className="text-slate-400 font-bold text-[10px] uppercase mb-4 tracking-[0.2em]">Daftar Menu</h3>
                 <div className="space-y-3">
-                  {selectedTx.items.map((item, idx) => (
+                  {(selectedTx.items || []).map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
                       <div>
                         <p className="font-black text-slate-800">{item.name}</p>

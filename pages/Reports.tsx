@@ -1,4 +1,5 @@
 
+// Import React to fix the 'Cannot find namespace React' error on line 13
 import React, { useState, useMemo } from 'react';
 import { TrendingUp, Wallet, Package, Download, ArrowUpRight, Loader2, Calendar } from 'lucide-react';
 import { useStore } from '../store';
@@ -14,40 +15,51 @@ const Reports: React.FC = () => {
   const { transactions } = useStore();
   const [isExporting, setIsExporting] = useState(false);
   
-  // Default range: last 30 days
+  // Helper: Fungsi ambil tanggal format YYYY-MM-DD dengan aman
+  const getSafeDateString = (dateInput: any) => {
+    try {
+      if (!dateInput) return '1970-01-01';
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime())) return '1970-01-01';
+      return d.toISOString().split('T')[0];
+    } catch {
+      return '1970-01-01';
+    }
+  };
+
   const now = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(now.getDate() - 30);
   
-  const [startDate, setStartDate] = useState(thirtyDaysAgo.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(getSafeDateString(thirtyDaysAgo));
+  const [endDate, setEndDate] = useState(getSafeDateString(now));
 
   // Filter transactions based on date range
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const txDate = new Date(t.createdAt).toISOString().split('T')[0];
+    return (transactions || []).filter(t => {
+      const txDate = getSafeDateString(t.createdAt);
       return t.status === 'COMPLETED' && txDate >= startDate && txDate <= endDate;
     });
   }, [transactions, startDate, endDate]);
 
-  const totalSales = filteredTransactions.reduce((acc, t) => acc + t.total, 0);
+  const totalSales = filteredTransactions.reduce((acc, t) => acc + Number(t.total || 0), 0);
   const totalCost = filteredTransactions.reduce((acc, t) => {
-    const transactionCost = t.items.reduce((itemAcc, item) => itemAcc + (item.costPrice * item.quantity), 0);
+    const transactionCost = (t.items || []).reduce((itemAcc, item) => itemAcc + (Number(item.costPrice || 0) * Number(item.quantity || 0)), 0);
     return acc + transactionCost;
   }, 0);
   const netProfit = totalSales - totalCost;
   const totalOrders = filteredTransactions.length;
 
   const paymentData = [
-    { name: 'Tunai', value: filteredTransactions.filter(t => t.paymentMethod === 'Tunai').reduce((a, b) => a + b.total, 0) },
-    { name: 'QRIS', value: filteredTransactions.filter(t => t.paymentMethod === 'QRIS').reduce((a, b) => a + b.total, 0) },
-    { name: 'Hutang', value: filteredTransactions.filter(t => t.paymentMethod === 'Hutang').reduce((a, b) => a + b.total, 0) },
+    { name: 'Tunai', value: filteredTransactions.filter(t => t.paymentMethod === 'Tunai').reduce((a, b) => a + Number(b.total || 0), 0) },
+    { name: 'QRIS', value: filteredTransactions.filter(t => t.paymentMethod === 'QRIS').reduce((a, b) => a + Number(b.total || 0), 0) },
+    { name: 'Hutang', value: filteredTransactions.filter(t => t.paymentMethod === 'Hutang').reduce((a, b) => a + Number(b.total || 0), 0) },
   ].filter(d => d.value > 0);
 
   const itemCounts: Record<string, number> = {};
   filteredTransactions.forEach(t => {
-    t.items.forEach(item => {
-      itemCounts[item.name] = (itemCounts[item.name] || 0) + item.quantity;
+    (t.items || []).forEach(item => {
+      itemCounts[item.name] = (itemCounts[item.name] || 0) + Number(item.quantity || 0);
     });
   });
 
@@ -67,7 +79,10 @@ const Reports: React.FC = () => {
         day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' 
       });
       
-      const formatPeriod = (d: string) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+      const formatPeriod = (d: string) => {
+        const parsed = new Date(d);
+        return isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+      };
 
       // --- HEADER ---
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -150,7 +165,7 @@ const Reports: React.FC = () => {
         startY: currentY + 5,
         head: [['Metode Pembayaran', 'Persentase', 'Total Nominal']],
         body: paymentData.map(d => {
-          const percentage = ((d.value / totalSales) * 100).toFixed(1);
+          const percentage = totalSales > 0 ? ((d.value / totalSales) * 100).toFixed(1) : '0';
           return [d.name, `${percentage}%`, formatCurrency(d.value)];
         }),
         theme: 'grid',
@@ -185,13 +200,13 @@ const Reports: React.FC = () => {
   return (
     <div className="flex-1 p-6 lg:p-10 bg-[#F4F7F9] overflow-y-auto no-scrollbar">
       <div className="max-w-6xl mx-auto space-y-12">
-        {/* Header Section - Updated Alignment & Sizes */}
+        {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-none">Analitik Bisnis</h1>
             <p className="text-slate-500 font-medium mt-1.5 text-sm lg:text-base">Pantau performa keuangan dan inventaris secara real-time.</p>
             
-            {/* Date Filters UI - Consistently h-[52px] */}
+            {/* Date Filters UI */}
             <div className="flex flex-wrap items-center gap-4 mt-8">
               <div className="flex flex-col">
                 <span className="text-[10px] text-slate-400 font-bold mb-1.5 uppercase tracking-widest ml-1">Dari</span>

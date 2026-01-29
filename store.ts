@@ -101,9 +101,7 @@ export const useStore = create<AppState>()(
           const res = await fetch(`${API_URL}/products`);
           if (!res.ok) throw new Error(`Server error: ${res.status}`);
           const rawData = await res.json();
-          
           if (!Array.isArray(rawData)) return;
-
           const normalizedProducts = rawData.map((p: any) => ({
             id: p.id || generateId(),
             name: p.name || 'Tanpa Nama',
@@ -113,7 +111,6 @@ export const useStore = create<AppState>()(
             isActive: p.isActive === true || p.isActive === 1 || p.is_active === 1 || p.is_active === true,
             outletId: p.outletId ?? p.outlet_id ?? 'o1'
           }));
-
           set({ products: normalizedProducts, connectionStatus: 'CONNECTED' });
         } catch (err: any) {
           set({ connectionStatus: 'DISCONNECTED' });
@@ -179,13 +176,24 @@ export const useStore = create<AppState>()(
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-              // PROTEKSI: Pastikan setiap transaksi punya array items agar tidak crash
-              const normalizedTx = data.map((t: any) => ({
-                ...t,
-                items: Array.isArray(t.items) ? t.items : [],
-                total: Number(t.total || 0),
-                subtotal: Number(t.subtotal || 0)
-              }));
+              const normalizedTx = data.map((t: any) => {
+                // PROTEKSI TANGGAL: Cek apakah valid
+                let validDate = t.createdAt;
+                try {
+                  const d = new Date(t.createdAt);
+                  if (isNaN(d.getTime())) throw new Error();
+                } catch {
+                  validDate = new Date().toISOString(); // Jika rusak, ganti hari ini
+                }
+                
+                return {
+                  ...t,
+                  createdAt: validDate,
+                  items: Array.isArray(t.items) ? t.items : [],
+                  total: Number(t.total || 0),
+                  subtotal: Number(t.subtotal || 0)
+                };
+              });
               set({ transactions: normalizedTx });
             }
           }
@@ -241,7 +249,7 @@ export const useStore = create<AppState>()(
       removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
     }),
     { 
-      name: 'angkringan-pos-v5', // Naikkan versi lagi agar clear
+      name: 'angkringan-pos-v6', // Versi baru lagi biar data lokal bersih
       partialize: (state) => ({
         currentUser: state.currentUser,
         theme: state.theme,
